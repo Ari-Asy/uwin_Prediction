@@ -1,0 +1,15 @@
+services:
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:latest
+
+    ports:
+      - "8888:8888"
+
+    volumes:
+      - ./notebook:/home/jovyan/work
+      - ./data:/home/jovyan/data
+    
+    environment:
+      JUPYTER_TOKEN: "123456"
+    
+    restart: unless-stopped
