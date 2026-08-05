@@ -1,0 +1,14 @@
+pandas>=2.2
+numpy>=1.26
+scipy>=1.13
+scikit-learn>=1.5
+matplotlib>=3.8
+joblib>=1.4
+
+xarray>=2024.3
+netCDF4>=1.6
+cfgrib>=0.9
+cdsapi>=0.7
+
+pyarrow>=16.0
+seaborn>=0.13

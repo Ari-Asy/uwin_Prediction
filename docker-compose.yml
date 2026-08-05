@@ -1,15 +1,22 @@
 services:
   jupyter:
-    image: quay.io/jupyter/scipy-notebook:latest
+    build: .
+    container_name: uwin-jupyter
 
     ports:
       - "8888:8888"
 
     volumes:
       - ./notebook:/home/jovyan/work
+      - ./src:/home/jovyan/src
       - ./data:/home/jovyan/data
+      - ./models:/home/jovyan/models
+      - ./reports:/home/jovyan/reports
     
     environment:
-      JUPYTER_TOKEN: "123456"
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-changeme}   # อ่านจาก .env
+      UWIN_DATA_ROOT: /home/jovyan/data
+      UWIN_SITE: GWD54                            # เปลี่ยนไซต์ที่นี่ที่เดียว
+      PYTHONPATH: /home/jovyan/src
     
     restart: unless-stopped

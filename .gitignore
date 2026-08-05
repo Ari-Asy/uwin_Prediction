@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+
+# ไฟล์ข้อมูลต่างๆ
+data/version/*
+data/reference/*
+data/output/*
+models/*.pkl
+
+# เก็บ model card ไว้
+!data/**/.gitkeep
+!models/**/.gitkeep
