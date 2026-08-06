@@ -73,7 +73,7 @@ def calculate_aep(k, A, rho, turbine = None, losses = None) -> dict:
     centers = (edges[:-1] + edges[1:]) / 2
     freq = np.diff(stats.weibull_min.cdf(edges, k, 0, A))
     freq = freq / freq.sum()
-    corrected = centers * (rho/1.225)**(1/3) # ปรับตามค่า air density
+    corrected = centers * (rho / 1.225)**(1/3) # ปรับตามค่า air density
     gross = float(np.sum(power_curve(corrected, t) * freq * 8760) / 1e6)
     net = gross
 

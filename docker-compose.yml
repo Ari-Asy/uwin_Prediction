@@ -7,16 +7,13 @@ services:
       - "8888:8888"
 
     volumes:
-      - ./notebook:/home/jovyan/work
-      - ./src:/home/jovyan/src
-      - ./data:/home/jovyan/data
-      - ./models:/home/jovyan/models
-      - ./reports:/home/jovyan/reports
+      - .:/home/jovyan/project
     
     environment:
-      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-changeme}   # อ่านจาก .env
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-changeme}
       UWIN_DATA_ROOT: /home/jovyan/data
-      UWIN_SITE: GWD54                            # เปลี่ยนไซต์ที่นี่ที่เดียว
-      PYTHONPATH: /home/jovyan/src
-    
+      UWIN_SITE: GWD54
+      PYTHONPATH: /home/jovyan/project/src
+ 
+    working_dir: /home/jovyan/project/notebook
     restart: unless-stopped

@@ -45,9 +45,8 @@ def compute_alpha(df: pd.DataFrame, lower="WS100", upper=None, site_code=None):
     out.loc[valid, "alpha_observed"] = (np.log(out.loc[valid, upper] / out.loc[valid, lower]) / np.log(h_up / h_low))
     return out, float(out["alpha_observed"].median())
 
-# แบ่ง
-def split_by_time(df: pd.DataFrame, feature_cols=None, target=None,
-                  train_fraction=TRAIN_FRACTION, site_code=None):
+# แบ่งข้อมูล
+def split_by_time(df: pd.DataFrame, feature_cols = None, target = None, train_fraction = TRAIN_FRACTION, site_code = None):
     """
     แบ่งข้อมูลเป็น train/test ตามเวลา
     OUTPUT: (train, test) -> DataFrame

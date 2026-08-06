@@ -1,0 +1,27 @@
+{
+  "model_name": "random_forest_alpha",
+  "data_version": "GWD54_20260806_0718_11dde3f6",
+  "features": [
+    "WS60",
+    "WS80",
+    "WS100",
+    "shear_low",
+    "wd_sin",
+    "wd_cos",
+    "Temp",
+    "Pres",
+    "RH",
+    "hour_sin",
+    "hour_cos",
+    "season_sin",
+    "season_cos"
+  ],
+  "scores": {
+    "MAE": 0.1025,
+    "RMSE": 0.1299,
+    "MAPE": 2.6135,
+    "R2": 0.928
+  },
+  "trained_at": "2026-08-06T07:43:04",
+  "note": ""
+}

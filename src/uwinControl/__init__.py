@@ -1,5 +1,4 @@
 """uwin Prediction package."""
-
 __version__ = "0.2.0"
 
 from . import config, data_io, energy, features, finance, qc, simulate

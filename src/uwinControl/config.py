@@ -7,10 +7,10 @@ from pathlib import Path
 import os
 
 # ที่อยู่ของโฟลเดอร์
-# อยู่ใน Docker:/home/jovyan/data และส่วนนอก Docker:<project_root>/data
-DATA_ROOT = Path(os.environ.get("UWIN_DATA_ROOT", "/home/jovyan/data"))
+# อยู่ใน Docker และส่วนนอก Docker:<project_root>/data
+DATA_ROOT = Path(os.environ.get("UWIN_DATA_ROOT", "/home/jovjan/data"))
 if not DATA_ROOT.exists():
-    DATA_ROOT = Path(__file__).resolve().parent[2] / "data"
+    DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
 
 VERSION_DIR = DATA_ROOT / "version"     # snapshot ที่เรา freeze เอาไว้
 REFERENCE_DIR = DATA_ROOT / "reference" # ERA5 / MERRA-2
@@ -18,7 +18,7 @@ OUTPUT_DIR = DATA_ROOT / "outputs"      # ผลลัพธ์จากกา�
 MODEL_DIR = DATA_ROOT.parent / "models" # โมเดลที่เราเทรนแล้ว
 
 for _dir in (VERSION_DIR, REFERENCE_DIR, OUTPUT_DIR, MODEL_DIR):
-    _dir.mkdir(parents=True, exist_ok=True)
+    _dir.mkdir(parents = True, exist_ok = True)
 
 # ข้อมูลของไซต์งาน
 SITES = {

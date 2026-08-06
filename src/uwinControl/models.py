@@ -24,7 +24,7 @@ def evaluate(y_true, y_pred, label: str, collector: list | None = None) -> dict:
         "model": label,
         "MAE": float(mean_absolute_error(y_true, y_pred)),
         "RMSE": float(np.sqrt(mean_squared_error(y_true, y_pred))),
-        "MAPE": float(np.mean(np.abs((y_true[above]-y_pred[above])/y_true[above])) * 100),
+        "MAPE": float(np.mean(np.abs((y_true[above] - y_pred[above]) / y_true[above])) * 100),
         "R2": float(r2_score(y_true, y_pred)),
     }
     if collector is not None:
@@ -39,7 +39,7 @@ def power_law_baseline(wind_lower, height_lower, height_upper, alpha):
 # สร้างโมเดล Random Forest
 def make_random_forest(**kwargs) -> RandomForestRegressor:
     """สร้างโมเดล Random Forest ด้วยค่าตั้งต้น"""
-    params = dict(n_estimators=300, min_samples_leaf=5, max_features="sqrt", random_state=42, n_jobs=-1)
+    params = dict(n_estimators = 300, min_samples_leaf = 5, max_features = "sqrt", random_state = 42, n_jobs = -1)
     params.update(kwargs)
     return RandomForestRegressor(**params)
 
@@ -68,7 +68,7 @@ def train_all(train, test, feature_cols, target, alpha_site, height_lower=100, h
 
     models["random_forest_alpha"] = make_random_forest().fit(X_train, train["alpha_observed"])
     alpha_pred = models["random_forest_alpha"].predict(X_test)
-    evaluate(y_test, X_test[f"WS{height_lower}"]*(height_upper/height_lower)**alpha_pred, "Random Forest ผ่าน α", scores)
+    evaluate(y_test, X_test[f"WS{height_lower}"] * (height_upper / height_lower)**alpha_pred, "Random Forest ผ่าน α", scores)
 
     return pd.DataFrame(scores).set_index("model").round(4), models
 
@@ -81,9 +81,12 @@ def save_model(model, name: str, data_version: str, feature_cols: list, scores: 
     stamp = f"{name}_{data_version}"
     joblib.dump(model, MODEL_DIR / f"{stamp}.pkl")
     card = {
-        "model_name": name, "data_version": data_version,
-        "features": feature_cols, "scores": scores,
-        "trained_at": datetime.now().isoformat(timespec="seconds"), "note": note
+        "model_name": name, 
+        "data_version": data_version,
+        "features": feature_cols, 
+        "scores": scores,
+        "trained_at": datetime.now().isoformat(timespec="seconds"), 
+        "note": note
         }
     (MODEL_DIR / f"{stamp}.json").write_text(json.dumps(card, indent = 2, ensure_ascii = False), encoding = "utf-8")
     return stamp
