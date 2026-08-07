@@ -21,10 +21,10 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     out["wd_sin"], out["wd_cos"] = np.sin(rad), np.cos(rad)
 
     hour = out.index.hour + out.index.minute / 60
-    out["hour_sin"], out["hour_cos"] = np.sin(2*np.pi*hour/24), np.cos(2*np.pi*hour/24)
+    out["hour_sin"], out["hour_cos"] = np.sin(2 * np.pi * hour / 24), np.cos(2 * np.pi * hour / 24)
 
     doy = out.index.dayofyear
-    out["season_sin"], out["season_cos"] = np.sin(2*np.pi*doy/365), np.cos(2*np.pi*doy/365)
+    out["season_sin"], out["season_cos"] = np.sin(2 * np.pi * doy / 365), np.cos(2 * np.pi * doy / 365)
     out["shear_low"] = out["WS100"] - out["WS60"]
     return out
 

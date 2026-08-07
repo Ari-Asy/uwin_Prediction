@@ -15,7 +15,7 @@ DEFAULT_TURBINE = {
     "cut_in_ms": 3.0,
     "rated_ms": 12.0,
     "cut_out_ms": 25.0,
-    "n_turbines": 10
+    "num_turbines": 10
     }
 
 DEFAULT_LOSSES = {
@@ -25,47 +25,55 @@ DEFAULT_LOSSES = {
     "other": 0.02
     }
 
+# หาค่าพารามิเตอร์ของ Wiedbull
 def fit_weibull(wind_speed) -> tuple[float, float]:
     """
     OUTPUT: (k = รูปร่างลม, A = สเกลลม m/s) 
-    โดยค่า k แบบปกติของลมบกจะอยู่ที่ 1.8-3.0
     """
-    v = np.asarray(wind_speed)
-    v = v[np.isfinite(v) & (v > 0)]
-    k, _, A = stats.weibull_min.fit(v, floc=0)
+    value = np.asarray(wind_speed)
+    value = value[np.isfinite(value) & (value > 0)]
+    k, _, A = stats.weibull_min.fit(value, floc = 0)
     return float(k), float(A)
 
-
+# คำนวณความเร็วลมเฉลี่ยจากพารามิเตอร์ Weibull
 def weibull_mean(k, A) -> float:
-    return A * gamma_function(1 + 1/k)
+    return A * gamma_function(1 + 1 / k)
 
-
+# คำนวณความหนาแน่นอากาศ
 def air_density(temp_c, pressure_hpa) -> float:
     """
-    ρ = P/(R*T): คือความหนาแน่นของอากาศ (kg/m³)
-    P = ความดัน (Pa), R = 287.05 J/(kg*K), T = อุณหภูมิ (K)
+    ρ = P / (R * T): คือความหนาแน่นของอากาศ (kg/m3)
+    P = ความดัน (Pa)
+    R = 287.05 J / (kg * K)
+    T = อุณหภูมิ (K)
     """
     return (pressure_hpa * 100) / (287.05 * (temp_c + 273.15))
 
-
+# คำนวณแปลงความเร็วลมเป็นกำลังไฟ (kW)
 def power_curve(wind_speed, turbine = None):
     """
     INPUT: array เป็นความเร็วลม (m/s)
     OUTPUT: array เป็นกำลังไฟ (kW)
     """
     t = turbine or DEFAULT_TURBINE
-    ws = np.asarray(wind_speed, dtype=float)
+    ws = np.asarray(wind_speed, dtype = float)
     power = np.zeros_like(ws)
     ramp = (ws >= t["cut_in_ms"]) & (ws < t["rated_ms"])
     power[ramp] = t["rated_kw"] * ((ws[ramp]**3 - t["cut_in_ms"]**3) / (t["rated_ms"]**3 - t["cut_in_ms"]**3))
     power[(ws >= t["rated_ms"]) & (ws <= t["cut_out_ms"])] = t["rated_kw"]
     return power
 
-
+# คำนวณพลังงานต่อปี (AEP)
+# AEP = ผลรวมของกำลังไฟ * ความถี่ของลม * 8760 ชม.
 def calculate_aep(k, A, rho, turbine = None, losses = None) -> dict:
     """
     AEP = Σ [P(v) * f(v) * 8760]
-    OUTPUT: dict {gross_per_turbine, net_per_turbine, net_farm, capacity_factor}
+    OUTPUT: dict {
+        gross_per_turbine,
+        net_per_turbine, 
+        net_farm, 
+        capacity_factor
+        }
     """
     t = turbine or DEFAULT_TURBINE
     losses = losses or DEFAULT_LOSSES
@@ -73,7 +81,7 @@ def calculate_aep(k, A, rho, turbine = None, losses = None) -> dict:
     centers = (edges[:-1] + edges[1:]) / 2
     freq = np.diff(stats.weibull_min.cdf(edges, k, 0, A))
     freq = freq / freq.sum()
-    corrected = centers * (rho / 1.225)**(1/3) # ปรับตามค่า air density
+    corrected = centers * (rho / 1.225)**(1 / 3) # ปรับตามค่า air density
     gross = float(np.sum(power_curve(corrected, t) * freq * 8760) / 1e6)
     net = gross
 
@@ -81,15 +89,15 @@ def calculate_aep(k, A, rho, turbine = None, losses = None) -> dict:
         net *= (1 - loss)
 
     net_farm = net * t["n_turbines"]
-    cf = net_farm * 1e6 / (t["rated_kw"] * t["n_turbines"] * 8760) * 100
+    capacity_factor = net_farm * 1e6 / (t["rated_kw"] * t["n_turbines"] * 8760) * 100
     return {
         "gross_per_turbine_gwh": gross,
         "net_per_turbine_gwh": net,
         "net_farm_gwh": float(net_farm),
-        "capacity_factor_pct": float(cf)
+        "capacity_factor_pct": float(capacity_factor)
         }
 
-
+# รวมค่าความไม่แน่นอน และหา P50/P90
 def exceedance_levels(aep_net_gwh, uncertainty: dict) -> dict:
     """
     การรวมค่าความไม่แน่นอนแบบ root-sum-square (RSS) แล้วหา P50/P75/P90 ของ AEP

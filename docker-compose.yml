@@ -11,7 +11,7 @@ services:
     
     environment:
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:-changeme}
-      UWIN_DATA_ROOT: /home/jovyan/data
+      UWIN_DATA_ROOT: /home/jovyan/project/data
       UWIN_SITE: GWD54
       PYTHONPATH: /home/jovyan/project/src
  

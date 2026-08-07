@@ -20,10 +20,15 @@ def clean_wind_speed(series: pd.Series, v_min = None, v_max = None, stuck_steps 
     stuck_steps = lim["stuck_steps"] if stuck_steps is None else stuck_steps
     spike_ratio = lim["spike_ratio"] if spike_ratio is None else spike_ratio
 
+    # ตัดค่านอกช่วงทิ้ง
     cleaned = series.where((series >= v_min) & (series <= v_max))
+
+    # ตัดค่าค้าง
     is_same = cleaned.diff().abs() < 1e-6
     run_length = is_same.groupby((~is_same).cumsum()).cumcount() + 1
     cleaned = cleaned.mask(run_length >= stuck_steps)
+
+    # ตัดค่า spike เมื่อเทียบกับค่ากลาง
     rolling_median = cleaned.rolling(18, center = True, min_periods = 6).median()
     return cleaned.mask(cleaned > rolling_median * spike_ratio + 2.0)
 

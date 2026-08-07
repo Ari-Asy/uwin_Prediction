@@ -48,6 +48,6 @@ def financial_analysis(aep_gwh: float, capacity_mw: float, econ: dict | None = N
     return {
         "NPV_musd": npv, 
         "IRR_pct": irr,
-        "payback_years": payback, 
+        "break_even_years": payback, 
         "LCOE_usd_per_mwh": lcoe
         }
