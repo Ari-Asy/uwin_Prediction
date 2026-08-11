@@ -22,8 +22,7 @@ def make_regional_wind(start, end, seed = 42) -> pd.Series:
 def make_era5(regional: pd.Series, seed = 3) -> pd.DataFrame:
     """ข้อมูล ERA5 แบบจำลอง = ลมภูมิภาค + bias"""
     random = np.random.default_rng(seed)
-    return pd.DataFrame({"era_ws": np.clip(0.82 * regional.to_numpy() + random.normal(0, 0.9, len(regional)) - 0.3, 0.1, 30)}, 
-                        index = regional.index)
+    return pd.DataFrame({"era_ws": np.clip(0.82 * regional.to_numpy() + random.normal(0, 0.9, len(regional)) - 0.3, 0.1, 30)}, index = regional.index)
 
 # สร้างข้อมูลจำลองของเสาวัดลมราย 10 นาที
 def make_mast_data(regional, start, end, site_code = None, seed = 7) -> pd.DataFrame:
@@ -34,7 +33,8 @@ def make_mast_data(regional, start, end, site_code = None, seed = 7) -> pd.DataF
     """
     site = get_site(site_code)
     random = np.random.default_rng(seed)
-    time = pd.date_range(start, end, freq = "10min")
+    interval_min = round(24 * 60 / site["records_per_day"]) # ความถี่มาจาก records_per_day ใน config (144 = 10min, 96 = 15min)
+    time = pd.date_range(start, end, freq = f"{interval_min}min")
     num = len(time)
 
     reference = (regional.reindex(time.union(regional.index)).interpolate("time").reindex(time).to_numpy())

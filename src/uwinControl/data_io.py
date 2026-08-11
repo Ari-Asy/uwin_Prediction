@@ -17,7 +17,6 @@ def load_raw(filename: str, site_code: str | None = None, timestamp_col: str = "
     INPUT : filename = ชื่อไฟล์ .CSV ใน data/raw/ และค่า site_code
     OUTPUT: DataFrame index = timestamp, ชื่อคอลัมน์ที่สั้น
     """
-
     site = get_site(site_code)
     df = pd.read_csv(RAW_DIR / filename)
     df[timestamp_col] = pd.to_datetime(df[timestamp_col])
@@ -28,7 +27,7 @@ def load_raw(filename: str, site_code: str | None = None, timestamp_col: str = "
     missing = [k for k in site["column_map"] if k not in df.columns]
     if missing:
         print(f"ไม่พบคอลัมน์ในไฟล์: {missing}")
-    return df.rename(columns=present)
+    return df.rename(columns = present)
 
 # คำนวณ hash ของข้อมูลเพื่อสร้างแต่ละเวอร์ชัน แล้วบันทึกข้อมูลเป็นไฟล์ไว้
 def save_version(df: pd.DataFrame, note: str = "", site_code: str | None = None) -> str:
@@ -37,7 +36,6 @@ def save_version(df: pd.DataFrame, note: str = "", site_code: str | None = None)
     INPUT: df = ข้อมูลที่ทำ Freeze ไว้ และ note = คำอธิบายเพิ่มเติม
     OUTPUT: version_id
     """
-
     site = get_site(site_code)
     content_hash = hashlib.md5(
         pd.util.hash_pandas_object(df.fillna(-999)).values.tobytes()).hexdigest()[:8]
@@ -96,3 +94,19 @@ def latest_version(site_code: str | None = None) -> str | None:
     """OUTPUT: version_id ล่าสุดของไซต์"""
     value = list_versions(site_code)
     return None if value.empty else value.iloc[0]["version_id"]
+
+# บันทึกผลลัพธ์ให้เป็นไฟล์ .csv
+def save_output(data, name: str, add_timestamp: bool = True) -> str:
+    """
+    INPUT: data = DataFrame หรือ Series ที่จะบันทึก, name = ชื่อไฟล์, add_timestamp = วันเวลาในชื่อไฟล์
+    OUTPUT: path ของไฟล์ที่บันทึกไว้
+    """
+    from .config import OUTPUT_DIR
+    if isinstance(data, pd.Series):
+        data = data.to_frame()
+    timestamp = f"_{datetime.now():%Y %m %d_ %H %M}" if add_timestamp else ""
+    path = OUTPUT_DIR / f"{name}{timestamp}.csv"
+
+    data.to_csv(path, encoding = "utf-8-sig")
+    print(f"Save: {path}")
+    return str(path)

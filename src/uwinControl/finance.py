@@ -7,9 +7,9 @@ finance.py คือโมดูลเอาไว้วิเคราะห์
 import numpy as np
 
 DEFAULT_ECONOMICS = {
-    "capex_musd_per_mw": 1.30,
-    "opex_musd_per_mw_year": 0.045,
-    "ppa_usd_per_mwh": 85.0,
+    "capex_musd_per_mw": 45.0, # ต้นทุกสร้างต่อ MW
+    "opex_musd_per_mw_year": 1.6, # ค่าดูแลต่อปีต่อ MW
+    "ppa_thb_per_kwh": 3.0, # ราคาขายไฟต่อหน่วย (บาท/kWh)
     "project_life_years": 20,
     "discount_rate": 0.08,
     "annual_degradation": 0.005,
@@ -24,12 +24,15 @@ def financial_analysis(aep_gwh: float, capacity_mw: float, econ: dict | None = N
     e = {**DEFAULT_ECONOMICS, **(econ or {})}
     capex = e["capex_musd_per_mw"] * capacity_mw
     opex = e["opex_musd_per_mw_year"] * capacity_mw
+    ppa_thb_per_mwh = e["ppa_thb_per_kwh"] * 1000
     life, rate, degradation = e["project_life_years"], e["discount_rate"], e["annual_degradation"]
 
+    # กระแสเงินสดตลอดปี
     cash_flow = [-capex]
     for year in range(1, life + 1):
         energy_mwh = aep_gwh * 1000 * (1 - degradation)**(year - 1)
-        cash_flow.append(energy_mwh * e["ppa_usd_per_mwh"] / 1e6 - opex)
+        revenue_mthb = energy_mwh * ppa_thb_per_mwh / 1e6
+        cash_flow.append(revenue_mthb - opex)
     cash_flow = np.array(cash_flow)
 
     npv = float(sum(c / (1 + rate)**i for i, c in enumerate(cash_flow)))
@@ -43,11 +46,12 @@ def financial_analysis(aep_gwh: float, capacity_mw: float, econ: dict | None = N
 
     disc_cost = capex + sum(opex / (1 + rate)**y for y in range(1, life + 1))
     disc_energy = sum(aep_gwh * 1000 * (1 - degradation)**(y - 1)/(1 + rate)**y for y in range(1, life + 1))
-    lcoe = float(disc_cost / disc_energy * 1e6)
+    lcoe_thb_per_mwh = float(disc_cost * 1e6 / disc_energy)
 
     return {
-        "NPV_musd": npv, 
-        "IRR_pct": irr,
-        "break_even_years": payback, 
-        "LCOE_usd_per_mwh": lcoe
+        "NPV_mthb": npv, # กำไรสุทธิ
+        "IRR_pct": irr, # อัตราผลตอบแทน
+        "payback_years": payback, # ปีที่คืนทุน
+        "LCOE_thb_per_mwh": lcoe_thb_per_mwh, # ต้นทุนต่อ MWh
+        "LCOE_thb_per_kwh": lcoe_thb_per_mwh / 1000, # ต้นทุนต่อ kWh
         }

@@ -88,8 +88,8 @@ def calculate_aep(k, A, rho, turbine = None, losses = None) -> dict:
     for loss in losses.values():
         net *= (1 - loss)
 
-    net_farm = net * t["n_turbines"]
-    capacity_factor = net_farm * 1e6 / (t["rated_kw"] * t["n_turbines"] * 8760) * 100
+    net_farm = net * t["num_turbines"]
+    capacity_factor = net_farm * 1e6 / (t["rated_kw"] * t["num_turbines"] * 8760) * 100
     return {
         "gross_per_turbine_gwh": gross,
         "net_per_turbine_gwh": net,

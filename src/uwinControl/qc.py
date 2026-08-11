@@ -8,10 +8,12 @@ import pandas as pd
 from .config import QC_LIMITS, get_site
 
 # จัดการกรองค่าความเร็วลม
-def clean_wind_speed(series: pd.Series, v_min = None, v_max = None, stuck_steps = None, spike_ratio = None) -> pd.Series:
+def clean_wind_speed(series: pd.Series, v_min = None, v_max = None, stuck_steps = None, spike_ratio = None, window = 18) -> pd.Series:
     """
     กรองค่าผิดปกติออกจากคอลัมน์ wind speed
     INPUT : series = ความเร็วลมราย 10 นาที ,1 คอลัมน์
+            stuck_steps = ค่าซ้ำติดกันกี่ช่วงถือว่าค้าง
+            window = จำนวนช่วงของ median กัน spike
     OUTPUT: Series ค่าเดิม ค่าน่าผิดปกติเปลี่ยนเป็น NaN แทนการลบ
     """
     lim = QC_LIMITS
@@ -29,7 +31,7 @@ def clean_wind_speed(series: pd.Series, v_min = None, v_max = None, stuck_steps 
     cleaned = cleaned.mask(run_length >= stuck_steps)
 
     # ตัดค่า spike เมื่อเทียบกับค่ากลาง
-    rolling_median = cleaned.rolling(18, center = True, min_periods = 6).median()
+    rolling_median = cleaned.rolling(window, center = True, min_periods = 6).median()
     return cleaned.mask(cleaned > rolling_median * spike_ratio + 2.0)
 
 # เป็นการเรียก clean_wind_speed ให้กับทุก sensor
@@ -40,9 +42,15 @@ def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
     """
     site = get_site(site_code)
     out = df.copy()
+
+    # คำนวนพารามิเตอร์ QC ตามความละเอียดของข้อมูล เปลี่ยน records_per_day ใน config
+    steps_per_hour = max(1, round(site["records_per_day"] / 24))
+    stuck_steps = steps_per_hour
+    window = steps_per_hour * 3
+
     for sensor in site["sensor_heights"]:
         if sensor in out.columns:
-            out[sensor] = clean_wind_speed(out[sensor])
+            out[sensor] = clean_wind_speed(out[sensor], stuck_steps = stuck_steps, window = window)
 
     top = f"WS{site['mast_height_m']}"
     booms = {k: v for k, v in site["boom_bearing_deg"].items() if k in out.columns}

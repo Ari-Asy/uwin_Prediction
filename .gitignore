@@ -7,8 +7,9 @@ __pycache__/
 # ไฟล์ข้อมูลต่างๆ
 data/version/*
 data/reference/*
-data/output/*
+data/outputs/*
 models/*.pkl
+models/*.json
 
 # เก็บ model card ไว้
 !data/**/.gitkeep

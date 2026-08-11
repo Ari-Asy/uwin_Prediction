@@ -12,7 +12,7 @@ services:
     environment:
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:-changeme}
       UWIN_DATA_ROOT: /home/jovyan/project/data
-      UWIN_SITE: GWD54
+      UWIN_SITE: GWD_10_160 # Default
       PYTHONPATH: /home/jovyan/project/src
  
     working_dir: /home/jovyan/project/notebook

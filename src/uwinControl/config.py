@@ -16,16 +16,16 @@ RAW_DIR = DATA_ROOT / "raw"             # ไฟล์ CSV จากไซต์
 VERSION_DIR = DATA_ROOT / "version"     # snapshot ที่เรา freeze เอาไว้
 REFERENCE_DIR = DATA_ROOT / "reference" # ERA5 / MERRA-2
 OUTPUT_DIR = DATA_ROOT / "outputs"      # ผลลัพธ์จากการรันโมเดล
-MODEL_DIR = DATA_ROOT.parent / "models" # โมเดลที่เราเทรนแล้ว
+MODEL_DIR = DATA_ROOT.parent / "models" # โมเดลที่เทรนแล้ว
 
 for _dir in (RAW_DIR, VERSION_DIR, REFERENCE_DIR, OUTPUT_DIR, MODEL_DIR):
     _dir.mkdir(parents = True, exist_ok = True)
 
 # ข้อมูลของไซต์งาน
 SITES = {
-    "GWD54": {
-        "station_code": "GWD54",
-        "province": "ยโสธร",
+    "GWD_10_160": {
+        "station_code": "GWD_10_160",
+        "province": "county_name",
         "latitude": 15.98565,
         "longitude": 104.2271899,
         "mast_height_m": 160, # เซนเซอร์ตัวบนสุด
@@ -64,10 +64,44 @@ SITES = {
         },
     },
 
+    "GWD_15_125": {
+        "station_code": "GWD_15_125",
+        "province": "county_name",
+        "latitude": 15.98565,
+        "longitude": 104.2271899,
+        "mast_height_m": 125, # เซนเซอร์ตัวบนสุด
+        "data_start": "2025-10-08",
+        "records_per_day": 96, # ราย 10 นาที
+
+        "column_map": {
+            "Ch1_Anem_125m_NW_m/s": "WS125",
+            "Ch2_Anem_100m_NW_m/s": "WS100",
+            "Ch3_Anem_80m_NW_m/s": "WS80",
+            "Ch4_Anem_60m_NW_m/s": "WS60",
+
+            "ChX_Vane_Deg": "WD",
+            "ChX_SD_m/s": "SD",
+            "Temperature_C": "Temp",
+            "Pressure_hPa": "Pres",
+            "Humidity_pct": "RH",
+        },
+
+        "sensor_heights": {
+            "WS125": 125,
+            "WS100": 100,
+            "WS80": 80,
+            "WS60": 60,
+        },
+
+        "boom_bearing_deg": {
+            "WS125": 315.0
+        },
+    }, 
+
     # เพิ่มไซต์ใหม่
 }
 
-ACTIVE_SITE = os.environ.get("UWIN_SITE", "GWD54")
+ACTIVE_SITE = os.environ.get("UWIN_SITE", "GWD_10_160")
 
 def get_site(code: str | None = None) -> dict:
     """
