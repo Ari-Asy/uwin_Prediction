@@ -12,7 +12,7 @@ from sklearn.ensemble import RandomForestRegressor ,HistGradientBoostingRegresso
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from .config import MODEL_DIR
+from .config import MODEL_DIR, get_site
 
 # โมเดลเสริมที่ติดตั้งเพิ่ม
 try:
@@ -86,12 +86,21 @@ def build_models() -> dict:
                                                         verbose = -1))
     return models
 
-# เทรนโมเดลทั้งหมดทั้ง 4 โมเดล
-def train_all(train, test, feature_cols, target, alpha_site, height_lower = 100, height_upper = 160) -> tuple[pd.DataFrame, dict]:
+# เทรนโมเดลทั้งหมด
+def train_all(train, test, feature_cols, target, alpha_site, height_lower = None, height_upper = None, site_code = None) -> tuple[pd.DataFrame, dict]:
     """
-    เทรนโมเดลทั้งชุด: Power Law → Linear → RandomForest → RandomForest ผ่าน α
+    เทรนโมเดลทั้งชุด: Power Law → Linear → RandomForest → RandomForest ผ่าน Alpha
+    height_lower/height_upper ถ้าไม่ส่งมา จะอ่านจาก config ของไซต์ (base_sensor และยอดของเสา)
     OUTPUT: (ตารางเปรียบเทียบผล, dict ของโมเดลที่เทรนแล้ว)
     """
+    site = get_site(site_code)
+    height_lower = height_lower or site["sensor_heights"][site["base_sensor"]]
+    height_upper = height_upper or site["mast_height_m"]
+
+    base_col = f"WS{height_lower}"
+    if base_col not in feature_cols:
+        raise ValueError(f"Power Law baseline ต้องใช้ '{base_col}' แต่ไม่มีใน feature_cols: {feature_cols}")
+
     x_train = train[feature_cols]
     y_train = train[target]
 
@@ -102,7 +111,7 @@ def train_all(train, test, feature_cols, target, alpha_site, height_lower = 100,
     models = {}
 
     # Baseline
-    evaluate(y_test, power_law_baseline(x_test[f"WS{height_lower}"], height_lower, height_upper, alpha_site), "Power Law (baseline)", scores)
+    evaluate(y_test, power_law_baseline(x_test[base_col], height_lower, height_upper, alpha_site), "Power Law (baseline)", scores)
 
     # Model ทุกตัวใน def build_model
     for key, (label, estimator) in build_models().items():
@@ -113,7 +122,7 @@ def train_all(train, test, feature_cols, target, alpha_site, height_lower = 100,
     # RF ที่ทำนาย alpha
     models["random_forest_alpha"] = make_random_forest().fit(x_train, train["alpha_observed"])
     alpha_pred = models["random_forest_alpha"].predict(x_test)
-    evaluate(y_test, x_test[f"WS{height_lower}"] * (height_upper / height_lower)**alpha_pred, "Random Forest pass α", scores)
+    evaluate(y_test, x_test[base_col] * (height_upper / height_lower)**alpha_pred, "Random Forest pass α", scores)
 
     #เรียงผลโมเดล
     table_model = pd.DataFrame(scores).set_index("model").sort_values("RMSE").round(4)

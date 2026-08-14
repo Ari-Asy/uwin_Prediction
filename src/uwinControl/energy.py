@@ -111,3 +111,36 @@ def exceedance_levels(aep_net_gwh, uncertainty: dict) -> dict:
         "P75": float(aep_net_gwh * (1 - stats.norm.ppf(0.75) * sigma)),
         "P90": float(aep_net_gwh * (1 - stats.norm.ppf(0.90) * sigma))
         }
+
+# เส้นการแจกแจงความน่าจะเป็นของ AEP เอาไว้พล็อตกราฟ
+def aep_distribution(aep_p50: float, sigma_total: float, num: int = 400) -> dict:
+    """
+    AEP แจกแจงแบบ Normal ใน P50 ด้วยส่วนเบี่ยงเบน = P50 * sigma_total
+    OUTPUT: dict {x, pdf, mean, sigma_abs} สำหรับวาด Probability Distribution Plot
+    """
+    sigma_abs = float(aep_p50 * sigma_total)
+    x = np.linspace(aep_p50 - 4 * sigma_abs, aep_p50 + 4 * sigma_abs, num)
+    return {
+        "x": x,
+        "pdf": stats.norm.pdf(x, aep_p50, sigma_abs),
+        "mean": float(aep_p50),
+        "sigma_abs": sigma_abs,
+        "sigma_total": float(sigma_total),
+        }
+
+# ตารางเทียบ P50/P75/P90 เอาไว้ใส่ในรายงานสรุป
+def exceedance_table(aep_p50: float, sigma_total: float, levels = (50, 75, 90)) -> pd.DataFrame:
+    """
+    OUTPUT: DataFrame เทียบแต่ละระดับ P: ค่า AEP, ค่า z, ส่วนต่างจาก P50
+    """
+    rows = []
+    for level in levels:
+        value = float(aep_p50 * (1 - stats.norm.ppf(level / 100) * sigma_total))
+        rows.append({
+            "Level": f"P{level:g}",
+            "Exceedance (%)": float(level),
+            "AEP (GWh/year)": round(value, 2),
+            "z-score": round(float(stats.norm.ppf(level / 100)), 3),
+            "vs P50 (%)": round((value / aep_p50 - 1) * 100, 2),
+            })
+    return pd.DataFrame(rows).set_index("Level")

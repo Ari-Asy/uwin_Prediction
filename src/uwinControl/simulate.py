@@ -5,7 +5,7 @@ simulate.py โมดูลสำหรับการสร้างข้อ�
 # import libraries
 import numpy as np
 import pandas as pd
-from .config import get_site
+from .config import get_site, top_sensor, sensors_top_down
 
 # สร้าง ลม รายชั่วโมง
 def make_regional_wind(start, end, seed = 42) -> pd.Series:
@@ -24,11 +24,13 @@ def make_era5(regional: pd.Series, seed = 3) -> pd.DataFrame:
     random = np.random.default_rng(seed)
     return pd.DataFrame({"era_ws": np.clip(0.82 * regional.to_numpy() + random.normal(0, 0.9, len(regional)) - 0.3, 0.1, 30)}, index = regional.index)
 
-# สร้างข้อมูลจำลองของเสาวัดลมราย 10 นาที
-def make_mast_data(regional, start, end, site_code = None, seed = 7) -> pd.DataFrame:
+# สร้างข้อมูลจำลองของเสาวัดลม (ความถี่ตาม records_per_day ของไซต์)
+def make_mast_data(regional, start, end, site_code = None, seed = 7, outages = None) -> pd.DataFrame:
     """
-    สร้างข้อมูลเสาวัดลมราย 10 นาที มีทั้งหมด 144 แถว/วัน พร้อม Bias ของข้อมูล:
-    calibration drift, offset, เงาเสา, spike, เซนเซอร์ที่ค้าง, ข้อมูลหาย
+    สร้างข้อมูลเสาวัดลมตามความถี่ของไซต์ (144 แถว/วัน = 10 นาที, 96 แถว/วัน = 15 นาที)
+    พร้อม Bias ของข้อมูล: calibration drift, offset, เงาเสา, spike, เซนเซอร์ที่ค้าง, ข้อมูลหาย
+    ตำแหน่งที่ใส่ bias เลือกจากลำดับความสูงใน config ไม่ได้ hardcode ชื่อเซนเซอร์
+    INPUT : outages = list ของวันที่ logger ดับ [(วันที่, จำนวนวัน)] ถ้าไม่ส่งจะใช้ค่าตั้งต้น
     OUTPUT: DataFrame คอลัมน์ชื่อตาม sensor_heights + WD, SD, Temp, Pres, RH
     """
     site = get_site(site_code)
@@ -58,10 +60,24 @@ def make_mast_data(regional, start, end, site_code = None, seed = 7) -> pd.DataF
         gap = np.abs((direction - boom + 180) % 360 - 180)
         data[sensor] *= (1 - np.clip((gap-120) / 60, 0, 1) * 0.06)
 
-    data["WS140"] *= (1 + np.linspace(0, 0.025, num)) # calibration drift
-    data["WS80"] += 0.08 # offset ค้าง
+    # เลือกตำแหน่งใส่ bias จากลำดับความสูง (ไซต์ไหนก็ใช้ได้ ไม่ผูกกับชื่อเซนเซอร์)
+    order = sensors_top_down(site_code)     # เรียงจากยอดเสาลงมา
+    top = top_sensor(site_code)
 
-    top = f"WS{site['mast_height_m']}_NW"
+    # drift/offset เป็น bias ที่ QC จับไม่ได้ ถ้าไปลงเซนเซอร์ยอดเสาหรือเซนเซอร์ฐาน
+    # จะทำให้ค่า α ที่คำนวณได้เพี้ยนตั้งแต่ต้นทาง เลยกันสองตัวนี้ไว้
+    biasable = [s for s in order if s not in (top, site["base_sensor"])] or order
+    drift_sensor = biasable[0]      # ตัวบนสุดที่ใส่ bias ได้
+    offset_sensor = biasable[-1]    # ตัวล่างสุดที่ใส่ bias ได้
+
+    # spike กับ sensor ค้าง เป็นของที่ QC ต้องจับได้ ใส่ตัวกลางเสาได้เลย
+    spike_sensor = order[len(order) // 2]
+    stuck_sensor = order[max(0, len(order) // 2 - 1)]
+
+    data[drift_sensor] *= (1 + np.linspace(0, 0.025, num)) # calibration drift
+    data[offset_sensor] += 0.08 # offset ค้าง
+
+
     data["WD"] = direction
     data["SD"] = np.clip(data[top] * turb_frac, 0.01, None)
     data["Temp"] = (27 + 4.5 * np.sin(2 * np.pi * (hour - 9) / 24) + 3 * np.sin(2 * np.pi * (doy - 100) / 365) + random.normal(0, 0.4, num))
@@ -69,14 +85,18 @@ def make_mast_data(regional, start, end, site_code = None, seed = 7) -> pd.DataF
     data["RH"] = np.clip(72 - 16 * np.sin(2 * np.pi * (hour - 9) / 24) + random.normal(0, 4, num), 20, 100)
 
     spike = random.random(num) < 0.0008
-    data.loc[spike, "WS100"] *= random.uniform(1.8, 3.0, spike.sum())
+    data.loc[spike, spike_sensor] *= random.uniform(1.8, 3.0, spike.sum())
     for _ in range(6):
         i = random.integers(0, num - 40)
-        data.iloc[i:i+random.integers(8, 40), data.columns.get_loc("WS120")] = data["WS120"].iloc[i]
+        data.iloc[i:i+random.integers(8, 40), data.columns.get_loc(stuck_sensor)] = data[stuck_sensor].iloc[i]
 
+    # ข้อมูลหายแบบกระจาย + ช่วง logger ดับเป็นก้อน (ข้ามช่วงที่อยู่นอกช่วงเวลาของข้อมูล)
     missing = random.random(num) < 0.12
-    for outage, days in [("2026-01-15", 5), ("2026-04-02", 9)]:
-        i = time.get_indexer([pd.Timestamp(outage)], method = "nearest")[0]
+    for outage, days in (outages or [("2026-01-15", 5), ("2026-04-02", 9)]):
+        outage = pd.Timestamp(outage)
+        if not (time[0] <= outage <= time[-1]):
+            continue
+        i = time.get_indexer([outage], method = "nearest")[0]
         missing[i:i + days * site["records_per_day"]] = True
     data.loc[missing, :] = np.nan
     return data

@@ -29,8 +29,14 @@ SITES = {
         "latitude": 15.98565,
         "longitude": 104.2271899,
         "mast_height_m": 160, # เซนเซอร์ตัวบนสุด
+        "hub_height_m": 150,  # TODO: ค่าสมมติ ของรุ่นกังหัน
         "data_start": "2025-10-08",
-        "records_per_day": 144, # ราย 10 นาที
+        "records_per_day": 144, # ราย 10 นาที (144 = 24*60/10)
+
+        # เซนเซอร์ที่ใช้เป็น input ของโมเดล (ตั้งใจใช้แค่ตัวล่าง ให้โมเดลต้องขยายขึ้นไปหายอดเสาเอง)
+        "feature_sensors": ["WS60", "WS80", "WS100"],
+        # ฐานอ้างอิงของ Power Law และ shear_low ต้องอยู่ใน feature_sensors
+        "base_sensor": "WS100",
 
         "column_map": {
             "Ch1_Anem_160m_NW_m/s": "WS160_NW",
@@ -67,11 +73,15 @@ SITES = {
     "GWD_15_125": {
         "station_code": "GWD_15_125",
         "province": "county_name",
-        "latitude": 15.98565,
+        "latitude": 15.98565, # TODO: ก๊อปมาจาก GWD_10_160
         "longitude": 104.2271899,
         "mast_height_m": 125, # เซนเซอร์ตัวบนสุด
+        "hub_height_m": 120, # TODO: ค่าสมมติ ตั้งไว้ไม่เกินยอดเสา จะได้เป็น interpolation
         "data_start": "2025-10-08",
-        "records_per_day": 96, # ราย 10 นาที
+        "records_per_day": 96, # ราย 15 นาที (96 = 24*60/15)
+
+        "feature_sensors": ["WS60", "WS80", "WS100"],
+        "base_sensor": "WS100",
 
         "column_map": {
             "Ch1_Anem_125m_NW_m/s": "WS125",
@@ -112,6 +122,69 @@ def get_site(code: str | None = None) -> dict:
     if code not in SITES:
         raise ValueError(f"ไม่พบไซต์งาน '{code}' - ไซต์งานที่มีอยู่: {list(SITES)}")
     return SITES[code]
+
+# หาเซนเซอร์ตัวบนสุดของเสา
+def top_sensor(code: str | None = None) -> str:
+    """
+    OUTPUT: ชื่อเซนเซอร์ที่ยอดเสา
+    """
+    site = get_site(code)
+    mast = site["mast_height_m"]
+    at_top = [s for s, h in site["sensor_heights"].items() if h == mast]
+    if not at_top:
+        raise ValueError(f"ไซต์ {site['station_code']} ไม่มีเซนเซอร์ที่ความสูงยอดเสา {mast} ม.")
+    with_boom = [s for s in at_top if s in site["boom_bearing_deg"]]
+    return (with_boom or at_top)[0]
+
+# เรียงเซนเซอร์จากสูงลงต่ำ ระดับความสูงละ 1 ตัว (ระดับที่มี 2 ตัวเช่น NW/SE จะเอาตัวแรก)
+def sensors_top_down(code: str | None = None) -> list[str]:
+    """OUTPUT: list ชื่อเซนเซอร์เรียงจากสูงสุดไปต่ำสุด"""
+    site = get_site(code)
+    first_at_height = {}
+    for sensor, height in site["sensor_heights"].items():
+        first_at_height.setdefault(height, sensor)
+    return [first_at_height[h] for h in sorted(first_at_height, reverse = True)]
+
+# ตรวจ entry ของไซต์ เอาไว้เช็คข้อมูลในไซต์
+def validate_site(code: str | None = None) -> list[str]:
+    """
+    ตรวจว่า entry ของไซต์ในตัวแปร SITES ว่าถูกต้องไหม
+    OUTPUT: list ของปัญหาที่เจอ ถ้าว่าง = ผ่าน
+    """
+    site = get_site(code)
+    heights = site["sensor_heights"]
+    problems = []
+
+    # ตรวจว่ามีเซนเซอร์อยู่ที่ความสูงยอดเสาไหม
+    if not any(h == site["mast_height_m"] for h in heights.values()):
+        problems.append(f"ไม่มีเซนเซอร์ตัวไหนอยู่ที่ความสูงยอดเสา {site['mast_height_m']} ม.")
+
+    # ตรวจ feature_sensors
+    for sensor in site["feature_sensors"]:
+        if sensor not in heights:
+            problems.append(f"feature_sensors มี '{sensor}' แต่ไม่มีใน sensor_heights")
+
+    # ตรวจ base_sensor
+    if site["base_sensor"] not in site["feature_sensors"]:
+        problems.append(f"base_sensor '{site['base_sensor']}' ต้องอยู่ใน feature_sensors ด้วย")
+
+    # ตรวจ boom_bearing_deg
+    for sensor in site["boom_bearing_deg"]:
+        if sensor not in heights:
+            problems.append(f"boom_bearing_deg มี '{sensor}' แต่ไม่มีใน sensor_heights")
+
+    # ตรวจจำนวนข้อมูลต่อวัน
+    minutes_per_day = 24 * 60
+    if minutes_per_day % site["records_per_day"] != 0:
+        problems.append(f"records_per_day = {site['records_per_day']} หารกับ 1440 นาทีไม่ลงตัว")
+
+    # ตรวจว่า sensor ทุกตัวถูก map ใน column_map ไหม
+    mapped = set(site["column_map"].values())
+    for sensor in heights:
+        if sensor not in mapped:
+            problems.append(f"sensor_heights มี '{sensor}' แต่ column_map ไม่ได้ map ไปหาชื่อนี้")
+
+    return problems
 
 # ค่าตั้งต้นการวิเคราะห์คุณภาพข้อมูล
 QC_LIMITS = {

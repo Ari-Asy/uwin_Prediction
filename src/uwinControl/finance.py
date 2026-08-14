@@ -6,9 +6,10 @@ finance.py คือโมดูลเอาไว้วิเคราะห์
 # import libraries
 import numpy as np
 
+# หน่วยเงินเป็นบาททั้งหมด MTHB = ล้านบาท
 DEFAULT_ECONOMICS = {
-    "capex_musd_per_mw": 45.0, # ต้นทุกสร้างต่อ MW
-    "opex_musd_per_mw_year": 1.6, # ค่าดูแลต่อปีต่อ MW
+    "capex_mthb_per_mw": 45.0, # ต้นทุนสร้างต่อ MW (ล้านบาท)
+    "opex_mthb_per_mw_year": 1.6, # ค่าดูแลต่อปี ต่อ MW (ล้านบาท)
     "ppa_thb_per_kwh": 3.0, # ราคาขายไฟต่อหน่วย (บาท/kWh)
     "project_life_years": 20,
     "discount_rate": 0.08,
@@ -19,11 +20,11 @@ DEFAULT_ECONOMICS = {
 def financial_analysis(aep_gwh: float, capacity_mw: float, econ: dict | None = None) -> dict:
     """
     INPUT : aep_gwh = พลังงานต่อปี, capacity_mw = กำลังติดตั้ง
-    OUTPUT: dict {NPV_musd, IRR_pct, payback_years, LCOE_usd_per_mwh}
+    OUTPUT: dict {NPV_mthb, IRR_pct, payback_years, LCOE_thb_per_mwh, LCOE_thb_per_kwh}
     """
     e = {**DEFAULT_ECONOMICS, **(econ or {})}
-    capex = e["capex_musd_per_mw"] * capacity_mw
-    opex = e["opex_musd_per_mw_year"] * capacity_mw
+    capex = e["capex_mthb_per_mw"] * capacity_mw
+    opex = e["opex_mthb_per_mw_year"] * capacity_mw
     ppa_thb_per_mwh = e["ppa_thb_per_kwh"] * 1000
     life, rate, degradation = e["project_life_years"], e["discount_rate"], e["annual_degradation"]
 
