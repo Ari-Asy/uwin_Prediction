@@ -14,6 +14,8 @@ services:
       UWIN_DATA_ROOT: /home/jovyan/project/data
       UWIN_SITE: GWD_10_160 # Default
       PYTHONPATH: /home/jovyan/project/src
+      CDSAPI_URL: ${CDSAPI_URL}
+      CDSAPI_KEY: ${CDSAPI_KEY}
  
     working_dir: /home/jovyan/project/notebook
     restart: unless-stopped

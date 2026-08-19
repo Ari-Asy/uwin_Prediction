@@ -9,6 +9,7 @@ __pycache__/
 data/version/*
 data/reference/*
 data/outputs/*
+data/raw/*
 models/*.pkl
 models/*.json
 docs/*

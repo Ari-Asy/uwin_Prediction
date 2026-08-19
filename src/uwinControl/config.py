@@ -6,8 +6,17 @@ config.py กำหนดค่าคงที่สำหรับ Site
 from pathlib import Path
 import os
 
-# ที่อยู่ของโฟลเดอร์
-# อยู่ใน Docker และส่วนนอก Docker:<project_root>/data
+# ค่าตั้งต้นการวิเคราะห์คุณภาพข้อมูล
+QC_LIMITS = {
+    "v_min": 0.0,
+    "v_max": 40.0,
+    "stuck_steps": 6,
+    "spike_ratio": 2.0,
+}
+MIN_WIND_FOR_ALPHA = 3.0 # ตัดลมอ่อนออกจากการคำนวณทิศทางลม
+TRAIN_FRACTION = 0.70 # แบ่งตามเวลา
+
+# ที่อยู่ของโฟลเดอร์ อยู่ใน Docker และส่วนนอก Docker:<project_root>/data
 DATA_ROOT = Path(os.environ.get("UWIN_DATA_ROOT", "/home/jovyan/data"))
 if not DATA_ROOT.exists():
     DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
@@ -68,6 +77,12 @@ SITES = {
             "WS160_NW": 315.0,
             "WS160_SE": 135.0,
         },
+
+        "era5": {
+            "years": (2006, 2026), # ปีแรกถึงปีสุดท้าย
+            "margin_deg": 0.25, # ระยะขอบรอบพิกัดไซต์ หน่วยองศา
+            "height": 100, # ระดับความสูงที่ใช้ทำ MCP
+        },
     },
 
     "GWD_15_125": {
@@ -105,6 +120,12 @@ SITES = {
 
         "boom_bearing_deg": {
             "WS125": 315.0
+        },
+
+        "era5": {
+            "years": (2006, 2026),
+            "margin_deg": 0.25,
+            "height": 100,
         },
     }, 
 
@@ -145,6 +166,15 @@ def sensors_top_down(code: str | None = None) -> list[str]:
         first_at_height.setdefault(height, sensor)
     return [first_at_height[h] for h in sorted(first_at_height, reverse = True)]
 
+def era5_area(code: str | None = None) -> list[float]:
+    """
+    OUTPUT: [North, West, South, East] กล่องพื้นที่ใช้สำหรับ EAR5
+    """
+    site = get_site(code)
+    margin = site["era5"]["margin_deg"]
+    lat, lon = site["latitude"], site["longitude"]
+    return [lat + margin, lon - margin, lat - margin, lon + margin]
+
 # ตรวจ entry ของไซต์ เอาไว้เช็คข้อมูลในไซต์
 def validate_site(code: str | None = None) -> list[str]:
     """
@@ -184,14 +214,27 @@ def validate_site(code: str | None = None) -> list[str]:
         if sensor not in mapped:
             problems.append(f"sensor_heights มี '{sensor}' แต่ column_map ไม่ได้ map ไปหาชื่อนี้")
 
-    return problems
+    # ตรวจหา ERA5
+    era5 = site.get("era5")
+    if era5 is None:
+        problems.append("ค่า era5 ไม่มีใน entry ของ SITE")
+    else:
+        first_year, last_year = era5["years"]
+        if first_year > last_year:
+            problems.append(f"era5.years ผิดลำดับ: {first_year} > {last_year}")
 
-# ค่าตั้งต้นการวิเคราะห์คุณภาพข้อมูล
-QC_LIMITS = {
-    "v_min": 0.0,
-    "v_max": 40.0,
-    "stuck_steps": 6,
-    "spike_ratio": 2.0,
-}
-MIN_WIND_FOR_ALPHA = 3.0 # ตัดลมอ่อนออกจากการคำนวณทิศทางลม
-TRAIN_FRACTION = 0.70 # แบ่งตามเวลา
+        # ตรวจ overlap ของข้อมูลเสา กัน MCP เพี้ยน
+        start_year = int(site["data_start"][:4])
+        if last_year < start_year + 1:
+            problems.append(f"era5.years ถึงแค่ช่วง {last_year} แต่ข้อมูลเสาเริ่ม {start_year} "
+                            f"ต้องโหลด ERA5 ถึงอย่างน้อย {start_year + 1}")
+
+        # ตรวจ height ของเสากับ ERA5
+        if era5["height"] not in (10,100):
+            problems.append(f"era5.height ต้องเป็น 10 หรือ 100 ไม่ใช่ {era5['height']}")
+
+        # ตรวจ Margin หรือระยะขอบของพิกัดไซต์
+        if not 0 < era5["margin_deg"] <= 2:
+            problems.append(f"era5.margin_deg = {era5['margin_deg']} ผิดปกติ")
+
+    return problems

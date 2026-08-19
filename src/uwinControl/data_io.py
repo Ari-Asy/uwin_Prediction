@@ -100,7 +100,7 @@ def latest_version(site_code: str | None = None) -> str | None:
 _CURRENT_RUN: Path | None = None # เรียกใช้เฉพาะในไฟล์
 
 # เปิดรอบการรันใหม่ สร้างโฟลเดอร์ผลลัพธ์
-def start_run(note: str = "", site_code: str | None = None, data_version: str | None = None, run_id: str | None = None) -> str:
+def start_run(note: str = "", site_code: str | None = None, data_version: str | None = None, run_id: str | None = None, era5_info: dict | None = None) -> str:
     """
     สร้างโฟลเดอร์ data/outputs/<run_id>/ แล้วให้ save_output ทุกครั้งหลังจากนี้เขียนลงในนั้นเสร็จ
     INPUT : note = คำอธิบาย, data_version = version_id ที่ใช้เทรนข้อมูล
@@ -121,6 +121,7 @@ def start_run(note: str = "", site_code: str | None = None, data_version: str | 
         "mast_height_m": site["mast_height_m"],
         "records_per_day": site["records_per_day"],
         "data_version": data_version,
+        "era5": era5_info,
         "created_at": datetime.now().isoformat(timespec = "seconds"),
         "note": note,
         "files": [],
