@@ -54,7 +54,6 @@ def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
 
     top = f"WS{site['mast_height_m']}"
     booms = {k: v for k, v in site["boom_bearing_deg"].items() if k in out.columns}
-
     if "SD" in out.columns and booms:
         out["TI"] = out["SD"] / out[list(booms)[0]]
 
@@ -66,6 +65,20 @@ def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
         out.attrs["pct_using_first_boom"] = float(use_a.mean() * 100)
     elif len(booms) == 1:
         out[top] = out[list(booms)[0]]
+
+    # กรองค่าของ Temp/Pres/RH
+    analog_limits = {
+        "Temp": (QC_LIMITS["temp_min"], QC_LIMITS["temp_max"]),
+        "Pres": (QC_LIMITS["pres_min"], QC_LIMITS["pres_max"]),
+        "RH": (QC_LIMITS["rh_min"], QC_LIMITS["rh_max"]),
+    }
+    for column_analog, (low, high) in analog_limits.items():
+        if column_analog in out.columns:
+            bad_data = (out[column_analog] < low) | (out[column_analog] > high)
+            if bad_data.any():
+                print(f"QC {column_analog}: ตัดค่าช่วง [{low}, {high}] ออก {bad_data.sum():,} แถว ({bad_data.mean() * 100:.2f}%)")
+            out.loc[bad_data, column_analog] = np.nan
+
     return out
 
 # คำนวณผลต่างของมุม 2 ทิศ

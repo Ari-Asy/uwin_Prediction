@@ -12,11 +12,19 @@ from pathlib import Path
 import pandas as pd
 from .config import VERSION_DIR, RAW_DIR, OUTPUT_DIR, get_site
 
-# เอาไว้อ่านไฟล์ CSV จากโฟลเดอร์ data/raw/
 def load_raw(filename: str, site_code: str | None = None, timestamp_col: str = "timestamp") -> pd.DataFrame:
     """
+    อ่านไฟล์ Raw Data ตามที่ Layout กำหนดใน config
+    """
+    if get_site(site_code).get("layout") == "long":
+        return load_raw_long(filename, site_code)
+    return load_raw_wide(filename, site_code, timestamp_col)
+
+# เอาไว้อ่านไฟล์ CSV จากโฟลเดอร์ data/raw/
+def load_raw_wide(filename: str, site_code: str | None = None, timestamp_col: str = "timestamp") -> pd.DataFrame:
+    """
     INPUT : filename = ชื่อไฟล์ .CSV ใน data/raw/ และค่า site_code
-    OUTPUT: DataFrame index = timestamp, ชื่อคอลัมน์ที่สั้น
+    OUTPUT: DataFrame index = timestamp
     """
     site = get_site(site_code)
     df = pd.read_csv(RAW_DIR / filename)
@@ -29,6 +37,56 @@ def load_raw(filename: str, site_code: str | None = None, timestamp_col: str = "
     if missing:
         print(f"ไม่พบคอลัมน์ในไฟล์: {missing}")
     return df.rename(columns = present)
+
+def load_raw_long(filename: str, site_code: str | None = None) -> pd.DataFrame:
+    """
+    อ่านไฟล์ CSV แบบ long format
+    INPUT: filename = ชื่อไฟล์ใน data/raw/
+    OUTPUT: DataFrame index = timestamp (naive เวลาไทย), Colume ชื่อตาม channel_map
+    """
+    site = get_site(site_code)
+    df = pd.read_csv(RAW_DIR / filename, dtype = {"site_code": str})
+
+    # กรองข้อมูลเฉพาะไซต์
+    numeric_code = site["site_numeric_code"]
+    before = len(df)
+    df = df[df["site_code"] == numeric_code]
+    if df.empty:
+        raise ValueError(f"ไม่พบ site_code '{numeric_code}' ในไฟล์"
+                         f"(ข้อมูลที่มีคือ {sorted(pd.read_csv(RAW_DIR / filename, dtype = str)['site_code'].unique())})")
+    if len(df) < before:
+        print(f"กรองเฉพาะไซต์ {numeric_code} : {len(df):,} จาก {before:,} แถว")
+
+    # timestamp ถอดเวลาให้เป็นเวลาไทย
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc = True)
+    df["timestamp"] = df["timestamp"].dt.tz_convert("Asia/Bangkok").dt.tz_localize(None)
+
+    # เอาเฉพาะ channel ที่กำหนดไว้
+    channel_map = site["channel_map"]
+    channel_map_select = sorted(set(df["channel"].unique()) - set(channel_map))
+    if channel_map_select:
+        print(f"ข้าม channel: {channel_map_select}")
+    df = df[df["channel"].isin(channel_map)].copy()
+    df["name"] = df["channel"].map(channel_map)
+
+    # pivot table ค่าเฉลี่ยกับตารางหลัก
+    pivot_data = df.pivot_table(index = "timestamp", columns = "name", values = "avg")
+    # pivot table SD เลือกเฉพาะคอลัมน์ แล้วเอาไปคำนวณ IT
+    pivot_sd = df.pivot_table(index = "timestamp", columns = "name", values = "sd")
+    pivot_data["SD"] = pivot_sd[site["sd_sensor"]]
+    pivot_data["WD"] = pivot_data[site["wind_direction_sensor"]]
+
+    # เติมข้อมูลแถวที่หายไปให้ครบตามเวลา
+    step_min = 24 * 60 // site["records_per_day"]
+    full_index = pd.date_range(pivot_data.index.min(), pivot_data.index.max(), freq = f"{step_min} min")
+    missing = len(full_index) - len(pivot_data)
+    pivot_data = pivot_data.reindex(full_index)
+    pivot_data.index.name = "timestamp"
+
+    print(f"ช่วง: {pivot_data.index.min()} ถึง {pivot_data.index.max()} (GMT+7)")
+    print(f"แถวที่มี {len(full_index) - missing:,} จากที่มี {len(full_index):,}")
+    print(f"({(1 - missing / len(full_index)) * 100:.2f}% แถวที่หายไป {missing:,})")
+    return pivot_data.sort_index()
 
 # คำนวณ hash ของข้อมูลเพื่อสร้างแต่ละเวอร์ชัน แล้วบันทึกข้อมูลเป็นไฟล์ไว้
 def save_version(df: pd.DataFrame, note: str = "", site_code: str | None = None) -> str:

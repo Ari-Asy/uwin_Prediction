@@ -8,10 +8,14 @@ import os
 
 # ค่าตั้งต้นการวิเคราะห์คุณภาพข้อมูล
 QC_LIMITS = {
-    "v_min": 0.0,
-    "v_max": 40.0,
+    "v_min": 0.0, "v_max": 40.0,
     "stuck_steps": 6,
     "spike_ratio": 2.0,
+
+    #TODO รู้ได้ยังไงว่าค่านี้ มีหลักฐานอะไรไหมไปหามา
+    "temp_min": 5.0, "temp_max":50.0,
+    "pres_min": 950.0, "pres_max": 1050.0,
+    "rh_min": 0.0, "rh_max": 100.0,
 }
 MIN_WIND_FOR_ALPHA = 3.0 # ตัดลมอ่อนออกจากการคำนวณทิศทางลม
 TRAIN_FRACTION = 0.70 # แบ่งตามเวลา
@@ -32,6 +36,69 @@ for _dir in (RAW_DIR, VERSION_DIR, REFERENCE_DIR, OUTPUT_DIR, MODEL_DIR):
 
 # ข้อมูลของไซต์งาน
 SITES = {
+    "013054":{
+        "station_code": "013054",
+        "site_numeric_code": "013054",
+        "layout": "long",
+        "timezone": "+07:00",
+
+        "province": "ยโสธร",
+        "latitude": 15.98565,
+        "longitude": 104.2271899,
+
+        "mast_height_m": 160,
+        "hub_height_m": 150, #TODO ค่าสมมติ
+        "data_start": "2024-01-01",
+        "records_per_day": 144,
+
+        "feature_sensors": ["WS60", "WS80", "WS100"],
+        "base_sensor": "WS100",
+
+        "channel_map": {
+            1: "WS160_N",
+            2: "WS160_S",
+            3: "WS140",
+            4: "WS120",
+            5: "WS100",
+            6: "WS80",
+            7: "WS60",
+
+            13: "WD152_N",
+            14: "WD152_S",
+            15: "WD132",
+            20: "WD112",
+            21: "WD92",
+
+            16: "Temp",
+            17: "Pres",
+            18: "RH",
+        },
+
+        "sensor_heights": {
+            "WS160_N": 160,
+            "WS160_S": 160,
+            "WS140": 140,
+            "WS120": 120,
+            "WS100": 100,
+            "WS80": 80,
+            "WS60": 60,
+        },
+
+        "boom_bearing_deg": {
+            "WS160_N": 0.0,
+            "WS160_S": 180.0,
+        },
+
+        "wind_direction_sensor": "WD152_N",
+        "sd_sensor": "WS160_N",
+        "era5": {
+            "years": (2006, 2026),
+            "margin_deg": 0.25,
+            "height": 100,
+        },
+    },
+
+    # ไซต์จำลอง
     "GWD_10_160": {
         "station_code": "GWD_10_160",
         "province": "county_name",
@@ -208,12 +275,6 @@ def validate_site(code: str | None = None) -> list[str]:
     if minutes_per_day % site["records_per_day"] != 0:
         problems.append(f"records_per_day = {site['records_per_day']} หารกับ 1440 นาทีไม่ลงตัว")
 
-    # ตรวจว่า sensor ทุกตัวถูก map ใน column_map ไหม
-    mapped = set(site["column_map"].values())
-    for sensor in heights:
-        if sensor not in mapped:
-            problems.append(f"sensor_heights มี '{sensor}' แต่ column_map ไม่ได้ map ไปหาชื่อนี้")
-
     # ตรวจหา ERA5
     era5 = site.get("era5")
     if era5 is None:
@@ -236,5 +297,21 @@ def validate_site(code: str | None = None) -> list[str]:
         # ตรวจ Margin หรือระยะขอบของพิกัดไซต์
         if not 0 < era5["margin_deg"] <= 2:
             problems.append(f"era5.margin_deg = {era5['margin_deg']} ผิดปกติ")
+
+    # ตรวจค่าไฟล์ที่เป็น long format
+    if site.get("layout") == "long":
+        for key in ("site_numeric_code", "channel_map", "wind_direction_sensor", "sd_sensor"):
+            if key not in site:
+                problems.append(f"layout เป็น long format แต่ไม่มี '{key}'")
+
+        mapped = set(site.get("channel_map", {}).values())
+        if site.get("wind_direction_sensor") not in mapped:
+            problems.append(f"wind_direction_sensor '{site.get('wind_direction_sensor')}' ไม่มีใน channel_map")
+        if site.get("sd_sensor") not in mapped:
+            problems.append(f"sd_sensor '{site.get('sd_sensor')}' ไม่มีใน channel_map")
+
+        for sensor in site["sensor_heights"]:
+            if sensor not in mapped:
+                problems.append(f"sensor_heights มี '{sensor}' แต่ channel_map ไม่ได้ map ไปหา")
 
     return problems

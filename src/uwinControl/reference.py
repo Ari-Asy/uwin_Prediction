@@ -11,25 +11,7 @@ from .config import REFERENCE_DIR, get_site, era5_area
 DATASET = "reanalysis-era5-single-levels"
 DEFAULT_TIMEZONE = "Asia/Bangkok"
 
-# ตรวจข้อมูลภายใน EAR5
-# ตรวจระยะพิกัด
-# TODO สูตรคืออะไร แล้วมาได้ยังไง? เอามาใช้วัดอะไร
-def _distance_km(lati1, longi1, lati2, longi2) -> float:
-    """ตรวจระยะทางระหว่างสองพิกัดแบบ haversine (กม.)"""
-    radius = 6371.0
-    distance_lati = np.radians(lati2 - lati1)
-    distance_longi = np.radians(longi2 - longi1)
-    a = (np.sin(distance_lati / 2)**2 + np.cos(np.radians(lati1)) * np.cos(np.radians(lati2)) * np.sin(distance_longi / 2)**2)
-    return float(2 * radius * np.arcsin(np.sqrt(a)))
-
-# ที่อยู่ไฟล์ ERA5
-# TODO ดูว่าทำไมถึงเขียนแบบนี้ มีความหมายอะไร
-def era5_path(year: int, month: int, site_code: str | None = None) -> Path:
-    """OUTPUT: Path ของไฟล์ ERA5 ของไซต์นั้นๆ"""
-    site = get_site(site_code)
-    return REFERENCE_DIR / f"era5_{site['station_code']}_{year}_{month:02d}.nc"
-
-# สร้าง Request
+# สร้าง Request ยิง API ไปให้ CDS
 def build_request(year: int, month: int, site_code: str | None = None) -> dict:
     """
     OUTPUT: dict ที่ส่งให้ client.retrieve() ได้เลยครั้งละ 1 เดือน
@@ -53,6 +35,32 @@ def build_request(year: int, month: int, site_code: str | None = None) -> dict:
         "area": era5_area(site_code),
     }
 
+# ตรวจข้อมูลภายใน ERA5
+# ตรวจระยะพิกัด
+# TODO สูตรคืออะไร แล้วมาได้ยังไง? เอามาใช้วัดอะไร
+def _distance_km(lati1, longi1, lati2, longi2) -> float:
+    """ตรวจระยะทางระหว่างสองพิกัดแบบ haversine (กม.)"""
+    radius = 6371.0
+    distance_lati = np.radians(lati2 - lati1)
+    distance_longi = np.radians(longi2 - longi1)
+    a = (np.sin(distance_lati / 2)**2 + np.cos(np.radians(lati1)) * np.cos(np.radians(lati2)) * np.sin(distance_longi / 2)**2)
+    return float(2 * radius * np.arcsin(np.sqrt(a)))
+
+# ที่อยู่โฟลเดอร์ ERA5
+# TODO ดูว่าทำไมถึงเขียนแบบนี้ มีความหมายอะไร
+def era5_folder(site_code: str | None = None) -> Path:
+    """OUTPUT: เป็น Folder ที่เก็บ ERA5 ของไซต์นั้นๆ"""
+    site = get_site(site_code)
+    folder = REFERENCE_DIR / site["station_code"]
+    folder.mkdir(parents = True, exist_ok = True)
+    return folder
+
+# ที่อยู่ไฟล์ ERA5
+# TODO ดูว่าทำไมถึงเขียนแบบนี้ มีความหมายอะไร
+def era5_path(year: int, month: int, site_code: str | None = None) -> Path:
+    """OUTPUT: Path ที่เก็บข้อมูล ERA5 ของไซต์นั้นๆ"""
+    return era5_folder(site_code) / f"era5_{year}_{month:02d}.nc"
+
 # โหลดข้อมูล ERA5
 # TODO ศึกษามาว่าทำไมต้องเขียนฟังก์ชันแบบนี้
 def download_era5(year: int, month: int, site_code: str | None = None, force: bool = False) -> Path:
@@ -75,7 +83,7 @@ def download_era5(year: int, month: int, site_code: str | None = None, force: bo
 
 # โหลดข้อมูล ERA5 เป็นช่วง
 # TODO ศึกษามาว่าทำไมต้องเขียนฟังก์ชันแบบนี้
-def download_ear5_range(site_code: str | None = None, force: bool = False) -> list[Path]:
+def download_era5_range(site_code: str | None = None, force: bool = False) -> list[Path]:
     """
     วนโหลดข้อมูลตามช่วงใน config
     OUTPUT: list ของไฟล์ที่โหลดสำเร็จ
@@ -108,9 +116,8 @@ def load_era5(site_code: str | None = None, timezone: str | None = DEFAULT_TIMEZ
     OUTPUI: DataFrame index รายชั่วโมง โดยจะมีคอลัมน์คือ era_ws, era_wd, era_temp, era_pres
     """
     import xarray as xr
-
     site = get_site(site_code)
-    files = sorted(REFERENCE_DIR.glob(f"era5_{site['station_code']}_*.nc"))
+    files = sorted(era5_folder(site_code).glob("era5_*.nc"))
     if not files: # กรณีไม่พบไฟล์
         raise FileNotFoundError(f"ไม่พบไฟล์ ERA5 ของไซต์ {site['station_code']} ใน {REFERENCE_DIR}")
     dataset = xr.open_mfdataset(files, combine = "by_coords")
@@ -128,7 +135,7 @@ def load_era5(site_code: str | None = None, timezone: str | None = DEFAULT_TIMEZ
     u_value = point[f"u{height}"].to_series()
     v_value = point[f"v{height}"].to_series()
     temp = point["t2m"].to_series()
-    pressure = point["sp"].to_series
+    pressure = point["sp"].to_series()
 
     output = pd.DataFrame({ # TODO ไปหาข้อมูลมาว่าทำไม่ต้องเขียนแบบนี้สูตรพวกนี้มีผลยังไง
         "era_ws": np.sqrt(u_value**2 + v_value**2),
@@ -143,11 +150,10 @@ def load_era5(site_code: str | None = None, timezone: str | None = DEFAULT_TIMEZ
 
     # ERA5 เป็นเวลา UTC ต้องแปลงเวลา แล้วถอด timezone ออก เพราะถ้าเป็นกันจะ join กันไม่ได้
     if timezone:
-        output.index = output.index.timezone_localize("UTC").timezone_convert(timezone).timezone_localize(None)
+        output.index = output.index.tz_localize("UTC").tz_convert(timezone).tz_localize(None)
     output.index.name = "timestamp"
 
-    print(f"ช่วงเวลา: {output.index.min()} ถึงช่วง {output.index.max()}")
-    print(f"({'เวลา ' + timezone if timezone else 'UTC'})")
+    print(f"ช่วงเวลา: {output.index.min()} ถึงช่วง {output.index.max()} ({'เวลา ' + timezone if timezone else 'UTC'})")
     print(f"จำนวนแถว: {len(output):,}")
     print(f"ลมเฉลี่ยที่ {height} ม.: {output['era_ws'].mean():.2f} m/s")
     return output
