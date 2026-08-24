@@ -8,7 +8,10 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import joblib
-from sklearn.ensemble import RandomForestRegressor ,HistGradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor ,HistGradientBoostingRegressor ,GradientBoostingRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -60,6 +63,42 @@ def make_random_forest(**kwargs) -> RandomForestRegressor:
     params.update(kwargs)
     return RandomForestRegressor(**params)
 
+# สร้างโมเดล MLP
+def make_mlp(**kwargs):
+    """MLP สำหรับทำนายค่าลม โดยใช้ StandardScaler ก่อนเข้าโมเดล"""
+    params = dict(
+        hidden_layer_sizes = (64, 32),
+        activation = "relu",
+        solver = "adam",
+        learning_rate_init = 0.001,
+        max_iter = 1000,
+        random_state = 42,
+        early_stopping = False,
+    )
+    params.update(kwargs)
+    return make_pipeline(
+        StandardScaler(),
+        MLPRegressor(**params)
+    )
+
+def make_qgb(**kwargs):
+    """
+    Quantile Gradient Boosting
+    ค่า alpha = 0.50 หมายถึงการทำนายค่า P50
+    """
+    params = dict(
+        loss = "quantile",
+        alpha = 0.50,
+        n_estimators = 300,
+        learning_rate = 0.05,
+        max_depth = 3,
+        min_samples_leaf = 5,
+        random_state = 42,
+    )
+    params.update(kwargs)
+    return GradientBoostingRegressor(**params)
+
+
 # โมเดลที่ใช้ในการ Prediction
 def build_models() -> dict:
     """
@@ -70,6 +109,9 @@ def build_models() -> dict:
         "random_forest": ("Random Forest", make_random_forest()),
         "hist_gb": ("HistgradientBoosting", HistGradientBoostingRegressor(max_iter = 300, random_state = 42)),
         "svr": ("SVR", SVR(C = 10, epsilon = 0.1)),
+        "mlp": ("MLP", make_mlp()),
+        "qgb": ("Quantile GB (median)", make_qgb()),
+        
     }
     if _HAS_XGR:
         models["xgboost"] = ("XGBoost", XGBRegressor(n_estimators = 300,
@@ -119,10 +161,37 @@ def train_all(train, test, feature_cols, target, alpha_site, height_lower = None
         models[key] = estimator
         evaluate(y_test, estimator.predict(x_test), label, scores)
 
-    # RF ที่ทำนาย alpha
-    models["random_forest_alpha"] = make_random_forest().fit(x_train, train["alpha_observed"])
-    alpha_pred = models["random_forest_alpha"].predict(x_test)
-    evaluate(y_test, x_test[base_col] * (height_upper / height_lower)**alpha_pred, "Random Forest pass α", scores)
+    # Model ที่ทำนาย alpha
+    alpha_models = {
+        "random_forest_alpha": (
+            "Random Forest pass α",
+            make_random_forest()
+        ),
+        "mlp_alpha": (
+            "MLP pass α",
+            make_mlp()
+        ),
+        "qgb_alpha": (
+            "QGB pass α",
+            make_qgb()
+        ),
+    }
+    for key, (label, estimator) in alpha_models.items():
+        estimator.fit(x_train, train["alpha_observed"])
+        models[key] = estimator
+        alpha_predic = estimator.predict(x_test)
+
+        wind_predic = (
+            x_test[base_col]
+            * (height_upper / height_lower) ** alpha_predic
+        )
+
+        evaluate(
+            y_test,
+            wind_predic,
+            label,
+            scores
+        )
 
     #เรียงผลโมเดล
     table_model = pd.DataFrame(scores).set_index("model").sort_values("RMSE").round(4)
@@ -146,3 +215,18 @@ def save_model(model, name: str, data_version: str, feature_cols: list, scores: 
         }
     (MODEL_DIR / f"{stamp}.json").write_text(json.dumps(card, indent = 2, ensure_ascii = False), encoding = "utf-8")
     return stamp
+
+def predict_hub_wind(model, features, mode, base_col, height_lower, height_upper):
+    """
+    mode = direct: โมเดลที่เอาไว้ทำนายลมที่ความสูง hub height
+    mode = alpha: โมเดลทำนายค่า alpha แล้วใช้ Power Law
+    """
+    prediction = np.asarray(model.predict(features)).ravel()
+
+    if mode == "direct":
+        return prediction
+
+    if mode == "alpha":
+        return (features[base_col].to_numpy() * (height_upper / height_lower) ** prediction)
+
+    raise ValueError(f"not found: {mode}")

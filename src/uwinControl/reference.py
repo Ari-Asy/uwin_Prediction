@@ -156,6 +156,7 @@ def load_era5(site_code: str | None = None, timezone: str | None = DEFAULT_TIMEZ
     print(f"ช่วงเวลา: {output.index.min()} ถึงช่วง {output.index.max()} ({'เวลา ' + timezone if timezone else 'UTC'})")
     print(f"จำนวนแถว: {len(output):,}")
     print(f"ลมเฉลี่ยที่ {height} ม.: {output['era_ws'].mean():.2f} m/s")
+    print("")
     return output
 
 # ฟังก์ชันแสดงผลข้อมูล เอาไว้ใส่ run_info.json

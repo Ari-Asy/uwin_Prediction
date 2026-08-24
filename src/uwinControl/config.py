@@ -11,6 +11,7 @@ QC_LIMITS = {
     "v_min": 0.0, "v_max": 40.0,
     "stuck_steps": 6,
     "spike_ratio": 2.0,
+    "sd_max": 5.0,
 
     #TODO รู้ได้ยังไงว่าค่านี้ มีหลักฐานอะไรไหมไปหามา
     "temp_min": 5.0, "temp_max":50.0,
@@ -98,108 +99,10 @@ SITES = {
         },
     },
 
-    # ไซต์จำลอง
-    "GWD_10_160": {
-        "station_code": "GWD_10_160",
-        "province": "county_name",
-        "latitude": 15.98565,
-        "longitude": 104.2271899,
-        "mast_height_m": 160, # เซนเซอร์ตัวบนสุด
-        "hub_height_m": 150,  # TODO: ค่าสมมติ ของรุ่นกังหัน
-        "data_start": "2025-10-08",
-        "records_per_day": 144, # ราย 10 นาที (144 = 24*60/10)
-
-        # เซนเซอร์ที่ใช้เป็น input ของโมเดล (ตั้งใจใช้แค่ตัวล่าง ให้โมเดลต้องขยายขึ้นไปหายอดเสาเอง)
-        "feature_sensors": ["WS60", "WS80", "WS100"],
-        # ฐานอ้างอิงของ Power Law และ shear_low ต้องอยู่ใน feature_sensors
-        "base_sensor": "WS100",
-
-        "column_map": {
-            "Ch1_Anem_160m_NW_m/s": "WS160_NW",
-            "Ch2_Anem_160m_SE_m/s": "WS160_SE",
-            "Ch3_Anem_140m_NW_m/s": "WS140",
-            "Ch4_Anem_120m_NW_m/s": "WS120",
-            "Ch5_Anem_100m_NW_m/s": "WS100",
-            "Ch6_Anem_80m_NW_m/s":  "WS80",
-            "Ch7_Anem_60m_NW_m/s":  "WS60",
-
-            "ChX_Vane_Deg": "WD",
-            "ChX_SD_m/s": "SD",
-            "Temperature_C": "Temp",
-            "Pressure_hPa": "Pres",
-            "Humidity_pct": "RH",
-        },
-
-        "sensor_heights": {
-            "WS160_NW": 160,
-            "WS160_SE": 160,
-            "WS140": 140,
-            "WS120": 120,
-            "WS100": 100,
-            "WS80": 80,
-            "WS60": 60,
-        },
-
-        "boom_bearing_deg": {
-            "WS160_NW": 315.0,
-            "WS160_SE": 135.0,
-        },
-
-        "era5": {
-            "years": (2006, 2026), # ปีแรกถึงปีสุดท้าย
-            "margin_deg": 0.25, # ระยะขอบรอบพิกัดไซต์ หน่วยองศา
-            "height": 100, # ระดับความสูงที่ใช้ทำ MCP
-        },
-    },
-
-    "GWD_15_125": {
-        "station_code": "GWD_15_125",
-        "province": "county_name",
-        "latitude": 15.98565, # TODO: ก๊อปมาจาก GWD_10_160
-        "longitude": 104.2271899,
-        "mast_height_m": 125, # เซนเซอร์ตัวบนสุด
-        "hub_height_m": 120, # TODO: ค่าสมมติ ตั้งไว้ไม่เกินยอดเสา จะได้เป็น interpolation
-        "data_start": "2025-10-08",
-        "records_per_day": 96, # ราย 15 นาที (96 = 24*60/15)
-
-        "feature_sensors": ["WS60", "WS80", "WS100"],
-        "base_sensor": "WS100",
-
-        "column_map": {
-            "Ch1_Anem_125m_NW_m/s": "WS125",
-            "Ch2_Anem_100m_NW_m/s": "WS100",
-            "Ch3_Anem_80m_NW_m/s": "WS80",
-            "Ch4_Anem_60m_NW_m/s": "WS60",
-
-            "ChX_Vane_Deg": "WD",
-            "ChX_SD_m/s": "SD",
-            "Temperature_C": "Temp",
-            "Pressure_hPa": "Pres",
-            "Humidity_pct": "RH",
-        },
-
-        "sensor_heights": {
-            "WS125": 125,
-            "WS100": 100,
-            "WS80": 80,
-            "WS60": 60,
-        },
-
-        "boom_bearing_deg": {
-            "WS125": 315.0
-        },
-
-        "era5": {
-            "years": (2006, 2026),
-            "margin_deg": 0.25,
-            "height": 100,
-        },
-    }, 
-
     # เพิ่มไซต์ใหม่
 }
 
-ACTIVE_SITE = os.environ.get("UWIN_SITE", "GWD_10_160")
+ACTIVE_SITE = os.environ.get("UWIN_SITE", "013054")
 
 def get_site(code: str | None = None) -> dict:
     """

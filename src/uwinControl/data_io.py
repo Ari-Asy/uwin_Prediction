@@ -12,33 +12,7 @@ from pathlib import Path
 import pandas as pd
 from .config import VERSION_DIR, RAW_DIR, OUTPUT_DIR, get_site
 
-def load_raw(filename: str, site_code: str | None = None, timestamp_col: str = "timestamp") -> pd.DataFrame:
-    """
-    อ่านไฟล์ Raw Data ตามที่ Layout กำหนดใน config
-    """
-    if get_site(site_code).get("layout") == "long":
-        return load_raw_long(filename, site_code)
-    return load_raw_wide(filename, site_code, timestamp_col)
-
-# เอาไว้อ่านไฟล์ CSV จากโฟลเดอร์ data/raw/
-def load_raw_wide(filename: str, site_code: str | None = None, timestamp_col: str = "timestamp") -> pd.DataFrame:
-    """
-    INPUT : filename = ชื่อไฟล์ .CSV ใน data/raw/ และค่า site_code
-    OUTPUT: DataFrame index = timestamp
-    """
-    site = get_site(site_code)
-    df = pd.read_csv(RAW_DIR / filename)
-    df[timestamp_col] = pd.to_datetime(df[timestamp_col])
-    df = df.set_index(timestamp_col).sort_index()
-
-    # เปลี่ยนชื่อเฉพาะคอลัมน์ที่มีในไฟล์
-    present = {k: v for k, v in site["column_map"].items() if k in df.columns}
-    missing = [k for k in site["column_map"] if k not in df.columns]
-    if missing:
-        print(f"ไม่พบคอลัมน์ในไฟล์: {missing}")
-    return df.rename(columns = present)
-
-def load_raw_long(filename: str, site_code: str | None = None) -> pd.DataFrame:
+def load_raw_data(filename: str, site_code: str | None = None) -> pd.DataFrame:
     """
     อ่านไฟล์ CSV แบบ long format
     INPUT: filename = ชื่อไฟล์ใน data/raw/
@@ -84,8 +58,9 @@ def load_raw_long(filename: str, site_code: str | None = None) -> pd.DataFrame:
     pivot_data.index.name = "timestamp"
 
     print(f"ช่วง: {pivot_data.index.min()} ถึง {pivot_data.index.max()} (GMT+7)")
-    print(f"แถวที่มี {len(full_index) - missing:,} จากที่มี {len(full_index):,}")
-    print(f"({(1 - missing / len(full_index)) * 100:.2f}% แถวที่หายไป {missing:,})")
+    print(f"แถวที่มี {len(full_index) - missing:,} จากแถวที่ควรมี {len(full_index):,} (coverage {(1 - missing / len(full_index)) * 100:.2f}%)")
+    print(f"แถวที่หายไป {missing:,}")
+    print("")
     return pivot_data.sort_index()
 
 # คำนวณ hash ของข้อมูลเพื่อสร้างแต่ละเวอร์ชัน แล้วบันทึกข้อมูลเป็นไฟล์ไว้

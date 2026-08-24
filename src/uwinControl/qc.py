@@ -34,26 +34,47 @@ def clean_wind_speed(series: pd.Series, v_min = None, v_max = None, stuck_steps 
     rolling_median = cleaned.rolling(window, center = True, min_periods = 6).median()
     return cleaned.mask(cleaned > rolling_median * spike_ratio + 2.0)
 
-# เป็นการเรียก clean_wind_speed ให้กับทุก sensor
-def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
+def _clean_wind_sensors(out: pd.DataFrame, site: dict) -> pd.DataFrame:
     """
-    INPUT : df ที่เปลี่ยนชื่อคอลัมน์แล้ว
-    OUTPUT: df ที่ผ่านการ QC + คอลัมน์ TI และ WS<mast> แก้เสร็จแล้ว
+    INPUT: out = DataFrame ที่จะแก้, site = dict ของไซต์
+    OUTPUT: DataFrame ที่คอลัมน์ลมผ่าน clean_wind_speed 
     """
-    site = get_site(site_code)
-    out = df.copy()
-
     # คำนวนพารามิเตอร์ QC ตามความละเอียดของข้อมูล เปลี่ยน records_per_day ใน config
     steps_per_hour = max(1, round(site["records_per_day"] / 24))
-    stuck_steps = steps_per_hour
-    window = steps_per_hour * 3
-
     for sensor in site["sensor_heights"]:
         if sensor in out.columns:
-            out[sensor] = clean_wind_speed(out[sensor], stuck_steps = stuck_steps, window = window)
+            out[sensor] = clean_wind_speed(out[sensor], stuck_steps = steps_per_hour, window = steps_per_hour * 3)
+    return out
+    
+def _clean_analog(out: pd.DataFrame) -> pd.DataFrame:
+    """
+    INPUT: out = DataFrame ที่จะแก้
+    OUTPUT: DataFrame ที่ SD/Temp/Pres/RH ถูกตัดค่านอกช่วงเป็น NaN
+    ต้องมีการเรียกฟังก์ชัน _apply_tower_shadow เพราะ TI คำนวณจาก SD
+    """
+    # กรองค่าของ Temp/Pres/RH
+    analog_limits = {
+        "SD": (0.0, QC_LIMITS["sd_max"]),
+        "Temp": (QC_LIMITS["temp_min"], QC_LIMITS["temp_max"]),
+        "Pres": (QC_LIMITS["pres_min"], QC_LIMITS["pres_max"]),
+        "RH": (QC_LIMITS["rh_min"], QC_LIMITS["rh_max"]),
+    }
+    for column_analog, (low, high) in analog_limits.items():
+        if column_analog not in out.columns:
+            continue
+        bad_analog = (out[column_analog] < low) | (out[column_analog] > high)
+        if bad_analog.any():
+            print(f"QC {column_analog}: ตัดค่าที่เกินออก [{low}, {high}] ออก {bad_analog.sum():,} แถว ({bad_analog.mean()})")
+    return out
 
+def _apply_tower_shadow(out: pd.DataFrame, site: dict) -> pd.DataFrame:
+    """
+    INPUT: out = DataFrame ที่ผ่านการกรองแล้ว, site = dict ของไซต์
+    OUTPUT: DataFrame + คอลัมน์ TI และ WS<mast_height>
+    """
     top = f"WS{site['mast_height_m']}"
     booms = {k: v for k, v in site["boom_bearing_deg"].items() if k in out.columns}
+
     if "SD" in out.columns and booms:
         out["TI"] = out["SD"] / out[list(booms)[0]]
 
@@ -65,20 +86,20 @@ def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
         out.attrs["pct_using_first_boom"] = float(use_a.mean() * 100)
     elif len(booms) == 1:
         out[top] = out[list(booms)[0]]
+    return out
 
-    # กรองค่าของ Temp/Pres/RH
-    analog_limits = {
-        "Temp": (QC_LIMITS["temp_min"], QC_LIMITS["temp_max"]),
-        "Pres": (QC_LIMITS["pres_min"], QC_LIMITS["pres_max"]),
-        "RH": (QC_LIMITS["rh_min"], QC_LIMITS["rh_max"]),
-    }
-    for column_analog, (low, high) in analog_limits.items():
-        if column_analog in out.columns:
-            bad_data = (out[column_analog] < low) | (out[column_analog] > high)
-            if bad_data.any():
-                print(f"QC {column_analog}: ตัดค่าช่วง [{low}, {high}] ออก {bad_data.sum():,} แถว ({bad_data.mean() * 100:.2f}%)")
-            out.loc[bad_data, column_analog] = np.nan
+# เป็นการเรียก clean_wind_speed ให้กับทุก sensor
+def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
+    """
+    INPUT : df ที่เปลี่ยนชื่อคอลัมน์แล้ว
+    OUTPUT: df ที่ผ่านการ QC + คอลัมน์ TI และ WS<mast> แก้เสร็จแล้ว
+    """
+    site = get_site(site_code)
+    out = df.copy()
 
+    out = _clean_wind_sensors(out, site) # กรองลม
+    out = _clean_analog(out) # กรอง SD, Temp, Pres, RH
+    out = _apply_tower_shadow(out, site) # TI + รวมคู่เงาเสา
     return out
 
 # คำนวณผลต่างของมุม 2 ทิศ

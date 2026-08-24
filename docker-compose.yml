@@ -12,7 +12,7 @@ services:
     environment:
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:-changeme}
       UWIN_DATA_ROOT: /home/jovyan/project/data
-      UWIN_SITE: GWD_10_160 # Default
+      UWIN_SITE: "013054" # Default
       PYTHONPATH: /home/jovyan/project/src
       CDSAPI_URL: ${CDSAPI_URL}
       CDSAPI_KEY: ${CDSAPI_KEY}

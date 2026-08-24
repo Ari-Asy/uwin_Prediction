@@ -18,9 +18,6 @@ def feature_columns(site_code = None) -> list[str]:
     """
     return list(get_site(site_code)["feature_sensors"]) + DERIVED_COLUMNS
 
-# ค่าตั้งต้นของไซต์ที่ ACTIVE ตอน import (ถ้าจะสลับไซต์ ให้เรียก feature_columns() ใหม่)
-FEATURE_COLUMNS = feature_columns()
-
 # สร้างคอลัมน์ feature ใหม่จาก Raw Data ที่ผ่าน QC แล้ว
 def build_features(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
     """
