@@ -108,7 +108,7 @@ def build_models() -> dict:
         "linear": ("Linear Regression", LinearRegression()),
         "random_forest": ("Random Forest", make_random_forest()),
         "hist_gb": ("HistgradientBoosting", HistGradientBoostingRegressor(max_iter = 300, random_state = 42)),
-        "svr": ("SVR", SVR(C = 10, epsilon = 0.1)),
+        "svr": ("SVR", make_pipeline(StandardScaler(), SVR(C = 10, epsilon = 0.1))),
         "mlp": ("MLP", make_mlp()),
         "qgb": ("Quantile GB (median)", make_qgb()),
         
