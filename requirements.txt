@@ -6,7 +6,8 @@ matplotlib>=3.8
 joblib>=1.4
 lightgbm
 xgboost
-tensorflow
+tensorflow>=2.16
+keras>=3.0
 
 xarray>=2024.3
 netCDF4>=1.6

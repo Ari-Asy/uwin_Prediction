@@ -8,6 +8,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import joblib
+import tensorflow as tf
 from sklearn.ensemble import RandomForestRegressor ,HistGradientBoostingRegressor ,GradientBoostingRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
@@ -15,14 +16,22 @@ from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from numpy.lib.stride_tricks import sliding_window_view
 from .config import MODEL_DIR, get_site
 
 # โมเดลเสริมที่ติดตั้งเพิ่ม
+try:
+    import tensorflow as tf
+    _HAS_TF = True
+except ImportError:
+    _HAS_TF = False
+
 try:
     from xgboost import XGBRegressor
     _HAS_XGR = True
 except ImportError:
     _HAS_XGR = False
+
 try:
     from lightgbm import LGBMRegressor
     _HAS_LGBM = True
@@ -126,7 +135,22 @@ def build_models() -> dict:
                                                         random_state = 42,
                                                         n_jobs = 1,
                                                         verbose = -1))
+    if _HAS_TF:
+        models["lstm"] = ("LSTM", LSTMRegressor())
     return models
+
+def _windows(values, index, lookback, step_min):
+    """
+    ตัดข้อมูล 2 มิติ ให้เป็นหน้าต่างเวลา 3 มิติ เอาไว้ใช้สำหรับ LSTM
+    INPUT: values = ndarray (n, f) | index = DatetimeIndex ของ values | lookback = จำนวน step ย้อนหลังที่ให้ Model เห็น | step_min = ระยะห่าง
+    OUTPUT: (หน้าต่างข้อมูล 3 มิติ (m, lookback, f), ตำแหน่งแถวปลายของแต่ละหน้าต่าง)
+    """
+    win = sliding_window_view(values, lookback, axis = 0).transpose(0, 2, 1)
+    end = np.arange(lookback - 1, len(values))
+    # window ที่ใช้ได้ ก็ต่อเมื่อช่วงเวลาต้นกับปลายเท่ากัน (lookback - 1)
+    span_time = index[end] - index[end - lookback + 1]
+    span_pass = span_time == pd.Timedelta(minutes = step_min * (lookback - 1))
+    return win[span_pass], end[span_pass]
 
 # เทรนโมเดลทั้งหมด
 def train_all(train, test, feature_cols, target, alpha_site, height_lower = None, height_upper = None, site_code = None) -> tuple[pd.DataFrame, dict]:
@@ -230,3 +254,57 @@ def predict_hub_wind(model, features, mode, base_col, height_lower, height_upper
         return (features[base_col].to_numpy() * (height_upper / height_lower) ** prediction)
 
     raise ValueError(f"not found: {mode}")
+
+# -------------------------------------------------------------
+class LSTMRegressor:
+    """
+    ห่อ Keras LSTM เพื่อใช้สำหรับ build_models()
+    รับ DataFrame ที่มี DatetimeIndex เข้ามา แล้วแปลง window เวลาให้
+    """
+    def __init__(self, lookback = 6, units = 32, epochs = 20, batch_size = 256, step_min = 10, random_state = 42):
+        self.lookback = lookback
+        self.units = units
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.step_min = step_min
+        self.random_state = random_state
+
+    def _shape(self, x: pd.DataFrame):
+        """
+        แปลง DataFrame เป็นหน้าต่าง 3 มิติให้ครบทุกแถว
+        แถวที่มีประวัติย้อนหลังครบ ใช้หน้าต่างจริง
+        ถ้าแถวไม่ครบ (ต้นชุดข้อมูล หรือหลังช่องว่าง) ใช้ค่าปัจจุบันซ้ำ lookback ครั้ง
+        เพื่อให้การ predict() คืนค่าครบเท่าจำนวนแถวที่รับเข้ามา
+        """
+        values = self.scaler.transform(x)
+        full = np.repeat(values[:, None, :], self.lookback, axis = 1)
+        win, end = _windows(values, x.index, self.lookback, self.step_min)
+        full[end] = win
+        return full, end
+
+    def fit(self, x: pd.DataFrame, y):
+        keras = tf.keras
+        keras.utils.set_random_seed(self.random_state)
+        self.scaler = StandardScaler().fit(x)
+
+        win, end = _windows(self.scaler.transform(x), x.index, self.lookback, self.step_min)
+        y_win = np.asarray(y)[end]
+        self.model_ = keras.Sequential([
+            keras.layers.Input(shape = (self.lookback, x.shape[1])),
+            keras.layers.LSTM(self.units),
+            keras.layers.Dense(1),
+        ])
+        self.model_.compile(optimizer = "adam", loss = "mse")
+        self.model_.fit(win, 
+                        y_win,
+                        epochs = self.epochs, 
+                        batch_size = self.batch_size, 
+                        validation_split = 0.1, 
+                        verbose = 0, 
+                        callbacks = [keras.callbacks.EarlyStopping(patience = 3, 
+                                                                   restore_best_weights = True)])
+        return self
+
+    def predict(self, x: pd.DataFrame):
+        full, _ = self._shape(x)
+        return self.model_.predict(full, batch_size = self.batch_size, verbose = 0).ravel()

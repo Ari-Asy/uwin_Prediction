@@ -48,17 +48,16 @@ SITES = {
         "longitude": 104.2271899,
 
         "raw_filename": "wind_raws_202608181213.csv",
-        "mcp_sensor": "WS100",
-        "vertical_upper_sensor": "WS140",
-        "mast_height_m": 160,
+
+        "mast_height_m": 160, #TODO คืออะไร
         "hub_height_m": 150, #TODO ค่าสมมติ
-        "data_start": "2024-01-01",
-        "records_per_day": 144,
+        "data_start": "2024-01-01", 
+        "records_per_day": 144, #TODO คืออะไร
 
-        "feature_sensors": ["WS60", "WS80", "WS100"],
-        "base_sensor": "WS100",
+        "feature_sensors": ["WS60", "WS80", "WS100"], #TODO คืออะไร
+        "base_sensor": "WS100", #TODO คืออะไร
 
-        "channel_map": {
+        "channel_map": { #TODO คืออะไร
             1: "WS160_N",
             2: "WS160_S",
             3: "WS140",
@@ -78,7 +77,7 @@ SITES = {
             18: "RH",
         },
 
-        "sensor_heights": {
+        "sensor_heights": { #TODO คืออะไร
             "WS160_N": 160,
             "WS160_S": 160,
             "WS140": 140,
@@ -88,13 +87,13 @@ SITES = {
             "WS60": 60,
         },
 
-        "boom_bearing_deg": {
+        "boom_bearing_deg": { #TODO คืออะไร
             "WS160_N": 0.0,
             "WS160_S": 180.0,
         },
 
-        "wind_direction_sensor": "WD152_N",
-        "sd_sensor": "WS160_N",
+        "wind_direction_sensor": "WD152_N", #TODO คืออะไร
+        "sd_sensor": "WS160_N", #TODO คืออะไร
         "era5": {
             "years": (2006, 2026),
             "margin_deg": 0.25,
