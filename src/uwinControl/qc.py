@@ -65,6 +65,7 @@ def _clean_analog(out: pd.DataFrame) -> pd.DataFrame:
         bad_analog = (out[column_analog] < low) | (out[column_analog] > high)
         if bad_analog.any():
             print(f"QC {column_analog}: ตัดค่านอกช่วง [{low}, {high}] ออก {bad_analog.sum():,} แถว ({bad_analog.mean() * 100:.2f}%)")
+        out.loc[bad_analog, column_analog] = np.nan
     return out
 
 def _apply_tower_shadow(out: pd.DataFrame, site: dict) -> pd.DataFrame:

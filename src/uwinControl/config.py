@@ -47,6 +47,9 @@ SITES = {
         "latitude": 15.98565,
         "longitude": 104.2271899,
 
+        "raw_filename": "wind_raws_202608181213.csv",
+        "mcp_sensor": "WS100",
+        "vertical_upper_sensor": "WS140",
         "mast_height_m": 160,
         "hub_height_m": 150, #TODO ค่าสมมติ
         "data_start": "2024-01-01",
