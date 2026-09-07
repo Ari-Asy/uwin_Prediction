@@ -9,7 +9,7 @@ import pandas as pd
 from .config import MIN_WIND_FOR_ALPHA, TRAIN_FRACTION, get_site
 
 # feature ที่ไม่ได้มาจากเซนเซอร์
-DERIVED_COLUMNS = ["shear_low", "wd_sin", "wd_cos", "Temp", "Pres", "RH", "hour_sin", "hour_cos", "season_sin", "season_cos"]
+DERIVED_COLUMNS = ["shear_low", "wd_sin", "wd_cos", "Temp", "Pres", "RH", "hour_sin", "hour_cos", "month_sin", "month_cos"]
 
 # รายชื่อ feature ของไซต์
 def feature_columns(site_code = None) -> list[str]:
@@ -25,21 +25,23 @@ def build_features(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
     OUTPUT: df + คอลัมน์ feature ที่คำนวณเพิ่ม
     """
     site = get_site(site_code)
-    out = df.copy()
-    rad = np.deg2rad(out["WD"])
-    out["wd_sin"], out["wd_cos"] = np.sin(rad), np.cos(rad)
+    output = df.copy()
+    rad = np.deg2rad(output["WD"])
+    output["wd_sin"], output["wd_cos"] = np.sin(rad), np.cos(rad)
 
-    hour = out.index.hour + out.index.minute / 60
-    out["hour_sin"], out["hour_cos"] = np.sin(2 * np.pi * hour / 24), np.cos(2 * np.pi * hour / 24)
+    hour = output.index.hour + output.index.minute / 60
+    output["hour_sin"] = np.sin(2 * np.pi * hour / 24)
+    output["hour_cos"] = np.cos(2 * np.pi * hour / 24)
 
-    doy = out.index.dayofyear
-    out["season_sin"], out["season_cos"] = np.sin(2 * np.pi * doy / 365), np.cos(2 * np.pi * doy / 365)
+    day = output.index.dayofyear
+    output["month_sin"] = np.sin(2 * np.pi * day / 365)
+    output["month_cos"] = np.cos(2 * np.pi * day / 365)
 
     # ผลต่างลมช่วงล่าง = base_sensor - เซนเซอร์ที่ต่ำสุดใน feature_sensors
     heights = site["sensor_heights"]
     lowest = min(site["feature_sensors"], key = lambda s: heights[s])
-    out["shear_low"] = out[site["base_sensor"]] - out[lowest]
-    return out
+    output["shear_low"] = output[site["base_sensor"]] - output[lowest]
+    return output
 
 # คำนวณ wind shear exponent
 def compute_alpha(df: pd.DataFrame, lower = None, upper = None, site_code = None):

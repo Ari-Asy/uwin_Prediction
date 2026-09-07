@@ -4,6 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 .cdsapirc
+.venv-1/
 
 # ไฟล์ข้อมูลต่างๆ
 data/version/*
@@ -11,7 +12,6 @@ data/reference/*
 data/outputs/*
 data/raw/*
 models/*.pkl
-models/*.json
 docs/*
 
 # เก็บ model card ไว้

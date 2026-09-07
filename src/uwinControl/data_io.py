@@ -122,13 +122,6 @@ def list_versions(site_code: str | None = None) -> pd.DataFrame:
         })
     return pd.DataFrame(rows)
 
-# คืนตัว version_id ล่าสุดของไซต์
-def latest_version(site_code: str | None = None) -> str | None:
-    """OUTPUT: version_id ล่าสุดของไซต์"""
-    value = list_versions(site_code)
-    return None if value.empty else value.iloc[0]["version_id"]
-
-
 # บันทึกโฟลเดอร์ผลลัพธ์แยกตามรอบการรัน (1 รอบ = 1 โฟลเดอร์ใน data/outputs/)
 _CURRENT_RUN: Path | None = None # เรียกใช้เฉพาะในไฟล์
 
@@ -157,7 +150,6 @@ def start_run(note: str = "", site_code: str | None = None, data_version: str | 
         "era5": era5_info,
         "created_at": datetime.now().isoformat(timespec = "seconds"),
         "note": note,
-        "files": [],
     }
     (folder / "run_info.json").write_text(json.dumps(info, indent = 2, ensure_ascii = False), encoding = "utf-8")
     print(f"Run file: {folder}")
@@ -169,16 +161,6 @@ def run_dir(site_code: str | None = None) -> Path:
     if _CURRENT_RUN is None:
         start_run(note = "เปิดอัตโนมัติ (ไม่ได้เรียก start_run เอง)", site_code = site_code)
     return _CURRENT_RUN
-
-# เพิ่มชื่อไฟล์ที่บันทึกแล้วลงใน run_info.json
-def _record_file(folder: Path, filename: str) -> None:
-    info_file = folder / "run_info.json"
-    if not info_file.exists():
-        return
-    info = json.loads(info_file.read_text(encoding = "utf-8"))
-    if filename not in info.get("files", []):
-        info.setdefault("files", []).append(filename)
-    info_file.write_text(json.dumps(info, indent = 2, ensure_ascii = False), encoding = "utf-8")
 
 # บันทึกผลลัพธ์ให้เป็นไฟล์ .csv ลงในโฟลเดอร์ปัจจุบัน
 def save_output(data, name: str, add_timestamp: bool = False, site_code: str | None = None) -> str:
@@ -193,7 +175,6 @@ def save_output(data, name: str, add_timestamp: bool = False, site_code: str | N
     filename = f"{name}{timestamp}.csv"
 
     data.to_csv(folder / filename, encoding = "utf-8-sig")
-    _record_file(folder, filename)
     print(f"Save: {folder.name}/{filename}")
     return str(folder / filename)
 
@@ -209,7 +190,6 @@ def save_image(image, name: str, dpi: int = 130, site_code: str | None = None) -
                   dpi = dpi, # กำหนดความละเอียด
                   bbox_inches = "tight" # ตัดขอบว่างรอบรูป
                   )
-    _record_file(folder, filename)
     print(f"Save: {folder.name}/{filename}")
     return str(folder / filename)
 
@@ -229,7 +209,7 @@ def list_runs(site_code: str | None = None) -> pd.DataFrame:
             "site": info.get("site"),
             "created": info.get("created_at"),
             "data_version": info.get("data_version"),
-            "num_files": len(info.get("files", [])),
+            "num_files": len([files for files in folder.iterdir() if files.name != "run_info.json"]),
             "note": info.get("note"),
         })
     return pd.DataFrame(rows)

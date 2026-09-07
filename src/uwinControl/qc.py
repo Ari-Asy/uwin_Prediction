@@ -109,7 +109,7 @@ def angular_gap(angle_a, angle_b):
     return np.abs((angle_a - angle_b + 180) % 360 - 180)
 
 # สรุปเป็นเปอร์เซ็นความสมบูรณ์ของข้อมูลแต่ละ คอลัมน์
-def coverage_report(df: pd.DataFrame, site_code=None) -> pd.DataFrame:
+def coverage_report(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
     """OUTPUT: DataFrame coverage % รายคอลัมน์ บอกสถานะว่าผ่านเกณฑ์ 95% หรือไม่"""
     site = get_site(site_code)
     cols = [c for c in site["sensor_heights"] if c in df.columns]
@@ -120,19 +120,20 @@ def coverage_report(df: pd.DataFrame, site_code=None) -> pd.DataFrame:
         })
 
 # บอกสาเหตุการหายไปของข้อมูล
-def gap_structure(series: pd.Series, records_per_day=144) -> dict:
+def gap_structure(series: pd.Series, site_code = None) -> dict:
     """
     วิเคราะห์ว่าช่องว่างเป็นแบบกระจาย หรือแบบ logger
     OUTPUT: dict สรุปความยาวช่องว่างที่ข้อมูลหายไป
     """
+    site = get_site(site_code)
     missing = series.isna()
     if not missing.any():
         return {"num_gaps": 0}
     runs = missing.groupby((~missing).cumsum()[missing]).sum()
-    step_min = 24 * 60 / records_per_day
+    step_min = 24 * 60 / site["records_per_day"]
     return {
         "num_gaps": int(len(runs)),
         "longest_gap_hours": float(runs.max() * step_min / 60),
-        "gaps_over_1day": int((runs > records_per_day).sum()),
+        "gaps_over_1day": int((runs > site["records_per_day"]).sum()),
         "monthly_coverage_pct": (series.notna().resample("MS").mean() * 100).round(1).to_dict(),
     }

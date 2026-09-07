@@ -8,7 +8,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import joblib
-import tensorflow as tf
 from sklearn.ensemble import RandomForestRegressor ,HistGradientBoostingRegressor ,GradientBoostingRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
@@ -51,6 +50,7 @@ def evaluate(y_true, y_pred, label: str, collector: list | None = None) -> dict:
         "RMSE": float(np.sqrt(mean_squared_error(y_true, y_pred))),
         "MAPE": float(np.mean(np.abs((y_true[above] - y_pred[above]) / y_true[above])) * 100),
         "R2": float(r2_score(y_true, y_pred)),
+        "Hit10_pct": float((np.abs((y_true[above] - y_pred[above]) / y_true[above]) <= 0.10).mean() * 100),
     }
     if collector is not None:
         collector.append(score)
@@ -186,21 +186,7 @@ def train_all(train, test, feature_cols, target, alpha_site, height_lower = None
         evaluate(y_test, estimator.predict(x_test), label, scores)
 
     # Model ที่ทำนาย alpha
-    alpha_models = {
-        "random_forest_alpha": (
-            "Random Forest pass α",
-            make_random_forest()
-        ),
-        "mlp_alpha": (
-            "MLP pass α",
-            make_mlp()
-        ),
-        "qgb_alpha": (
-            "QGB pass α",
-            make_qgb()
-        ),
-    }
-    for key, (label, estimator) in alpha_models.items():
+    for key, (label, estimator) in build_alpha_models().items():
         estimator.fit(x_train, train["alpha_observed"])
         models[key] = estimator
         alpha_predic = estimator.predict(x_test)
@@ -220,6 +206,14 @@ def train_all(train, test, feature_cols, target, alpha_site, height_lower = None
     #เรียงผลโมเดล
     table_model = pd.DataFrame(scores).set_index("model").sort_values("RMSE").round(4)
     return table_model, models
+
+def build_alpha_models() -> dict:
+    """OUTPUT: dict {key: (label, estimator)} ของโมเดลที่ทำนาย alpha"""
+    return {
+        "random_forest_alpha": ("Random Forest pass alpha", make_random_forest()),
+        "mlp_alpha": ("MLP pass alpha", make_mlp()),
+        "qgb_alpha": ("QGB pass alpha", make_qgb()),
+    }
 
 # บันทึกโมเดลที่ได้ทำการเทรนไปแล้ว
 def save_model(model, name: str, data_version: str, feature_cols: list, scores: dict | None = None, note: str = "") -> str:
@@ -254,6 +248,20 @@ def predict_hub_wind(model, features, mode, base_col, height_lower, height_upper
         return (features[base_col].to_numpy() * (height_upper / height_lower) ** prediction)
 
     raise ValueError(f"not found: {mode}")
+
+# โหลดโมเดลที่บันทึกไว้
+def load_model(stamp: str, feature_cols: list | None = None):
+    """
+    โหลดโมเดลที่เซฟไว้ พร้อม Model card
+    INPUT: stamp = ชื่อไฟล์, feature_cols = ส่งมาเพื่อเช็คว่าตรงกับตอนเทรนไหม
+    OUTPUT: (model, card)
+    """
+    card_model = json.loads((MODEL_DIR / f"{stamp}.json").read_text(encoding = "utf-8"))
+    if feature_cols is not None and list(feature_cols) != card_model["features"]:
+        raise ValueError(f"feature ไม่ตรงกับตอนเทรน\n"
+                         f"Trend: {card_model['features']}\n"
+                         f"Now  : {list(feature_cols)}")
+    return joblib.load(MODEL_DIR / f"{stamp}.pkl"), card_model
 
 # -------------------------------------------------------------
 class LSTMRegressor:

@@ -129,15 +129,6 @@ def top_sensor(code: str | None = None) -> str:
     with_boom = [s for s in at_top if s in site["boom_bearing_deg"]]
     return (with_boom or at_top)[0]
 
-# เรียงเซนเซอร์จากสูงลงต่ำ ระดับความสูงละ 1 ตัว (ระดับที่มี 2 ตัวเช่น NW/SE จะเอาตัวแรก)
-def sensors_top_down(code: str | None = None) -> list[str]:
-    """OUTPUT: list ชื่อเซนเซอร์เรียงจากสูงสุดไปต่ำสุด"""
-    site = get_site(code)
-    first_at_height = {}
-    for sensor, height in site["sensor_heights"].items():
-        first_at_height.setdefault(height, sensor)
-    return [first_at_height[h] for h in sorted(first_at_height, reverse = True)]
-
 def era5_area(code: str | None = None) -> list[float]:
     """
     OUTPUT: [North, West, South, East] กล่องพื้นที่ใช้สำหรับ EAR5
@@ -203,20 +194,13 @@ def validate_site(code: str | None = None) -> list[str]:
         if not 0 < era5["margin_deg"] <= 2:
             problems.append(f"era5.margin_deg = {era5['margin_deg']} ผิดปกติ")
 
-    # ตรวจค่าไฟล์ที่เป็น long format
-    if site.get("layout") == "long":
-        for key in ("site_numeric_code", "channel_map", "wind_direction_sensor", "sd_sensor"):
-            if key not in site:
-                problems.append(f"layout เป็น long format แต่ไม่มี '{key}'")
-
-        mapped = set(site.get("channel_map", {}).values())
-        if site.get("wind_direction_sensor") not in mapped:
-            problems.append(f"wind_direction_sensor '{site.get('wind_direction_sensor')}' ไม่มีใน channel_map")
-        if site.get("sd_sensor") not in mapped:
-            problems.append(f"sd_sensor '{site.get('sd_sensor')}' ไม่มีใน channel_map")
-
-        for sensor in site["sensor_heights"]:
-            if sensor not in mapped:
-                problems.append(f"sensor_heights มี '{sensor}' แต่ channel_map ไม่ได้ map ไปหา")
+    mapped = set(site["channel_map"].values())
+    if site["wind_direction_sensor"] not in mapped:
+        problems.append(f"wind_direction_sensor '{site['wind_direction_sensor']}' ไม่มีใน channel_map")
+    if site["sd_sensor"] not in mapped:
+        problems.append(f"sd_sensor '{site['sd_sensor']}' ไม่มีใน channel_map")
+    for sensor in site["sensor_heights"]:
+        if sensor not in mapped:
+            problems.append(f"sensor_heights มี '{sensor}' แต่ channel_map ไม่ได้ map ไปหา")
 
     return problems
