@@ -21,6 +21,20 @@ QC_LIMITS = {
 MIN_WIND_FOR_ALPHA = 3.0 # ตัดลมอ่อนออกจากการคำนวณทิศทางลม
 TRAIN_FRACTION = 0.70 # แบ่งตามเวลา
 
+# ทำนายค่าลม
+FORECAST = {
+    "harmonics_year": 2, # Fourier รอบปี
+    "harmonics_day": 2, # Fourier รอบวัน
+    "block_days": 7, # ความยาวคลุม synoptic cycle
+    "min_blocks": 5, # เดือนที่มีบล็อกให้สุ่มน้อยกว่านี้ ยืมเดือนข้างเคียงมาเพิ่ม
+    "ensemble": 1000,
+    # "site" = ใช้ฤดูกาลของเสาเอง 
+    # "era5" = ใช้ฤดูกาลของ ERA5 ระยะยาว
+    # ไซต์ 013054 ต้องเป็น "site" เพราะฤดูกาลของเสากลับด้านกับ ERA5 (ดู docs/mcp_conclusion.md)
+    "level_source": "site",
+    "quantiles": (0.10, 0.50, 0.90),
+}
+
 # ที่อยู่ของโฟลเดอร์ อยู่ใน Docker และส่วนนอก Docker:<project_root>/data
 DATA_ROOT = Path(os.environ.get("UWIN_DATA_ROOT", "/home/jovyan/data"))
 if not DATA_ROOT.exists():
