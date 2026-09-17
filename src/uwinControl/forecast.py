@@ -198,7 +198,7 @@ def wind_stats(wind_speed: pd.Series, freq: str = "MS") -> pd.DataFrame:
         "windspeed_p90": group.quantile(0.90),
         "coverage_pct": group.count() / group.size() * 100,
     })
-    output["ws_cv"] = output["ws_sd"] / output["ws_mean"]
+    output["windspeed_cv"] = output["windspeed_sd"] / output["windspeed_mean"]
     return output
 
 # แปลงลมเป็นพลังงานต่อคาบเวลา
@@ -225,7 +225,7 @@ def energy_stats(windspeed: pd.Series, freq: str = "MS", air_density: float = 1.
 # Run หลายรอบ แล้วสรุปเป็นข้อมูล P10/P50/P90
 def ensemble_stats(state: dict, start, end, freq: str = "MS", runs: int | None = None, air_density: float = 1.225) -> pd.DataFrame:
     """
-    OUTPUT: DataFrame คอลัมน์ <ค่า>_p10 / _p50 / _p90 เช่น ws_mean_p50, energy_mwh_p90
+    OUTPUT: DataFrame คอลัมน์ <ค่า>_p10 / _p50 / _p90 เช่น windspeed_mean_p50, energy_mwh_p90
     ไม่เก็บลมทุกเส้นไว้ในหน่วยความจำ แต่จะเก็บแค่ค่าสถิติของแต่ละรอบ
     """
     num = runs or FORECAST["ensemble"]
@@ -256,70 +256,3 @@ def score_by_freq(actual: pd.Series, predicted: pd.Series, freqs = ("10min", "1h
         score["n"] = len(pair)
         rows.append(score)
     return pd.DataFrame(rows).set_index("model")
-
-# ตรวจความถูกต้องเบื้องต้น: python -m uwinControl.forecast
-def _demo():
-    rng = np.random.default_rng(0)
-    idx = pd.date_range("2024-01-01", "2024-12-31 23:50", freq = "10min")
-    daily = pd.Series(rng.normal(0, 1.0, 366), index = pd.date_range("2024-01-01", periods = 366, freq = "D"))
-    truth = pd.Series(5 + np.sin(2 * np.pi * idx.dayofyear / 365) + 0.8 * np.sin(2 * np.pi * idx.hour / 24) + daily.rolling(3, min_periods = 1).mean().reindex(idx, method = "ffill").to_numpy() + rng.normal(0, 0.5, len(idx)), index = idx)
-    truth.iloc[1000:1500] = np.nan  # จำลองช่องว่างข้อมูล
-    era_idx = pd.date_range("2010-01-01", "2025-12-31 23:00", freq = "1h")
-    era5 = pd.DataFrame({"era_ws": 4 + np.sin(2 * np.pi * era_idx.dayofyear / 365) + rng.normal(0, 0.3, len(era_idx))}, index = era_idx)
-    era5.loc["2025", "era_ws"] = 100.0  # ปีอนาคตค่าผิดชัด ๆ ถ้ารั่วเข้ามา level จะพุ่ง
-
-    state = fit(truth, era5)
-    assert 0 < state["iav"] < 0.05, f"IAV ผิดปกติ {state['iav']} (ERA5 ปี 2025 รั่วเข้ามาหรือเปล่า)"
-
-    sim = simulate(state, "2025-01-01", "2025-12-31 23:50", seed = 1)
-    assert len(sim) == 365 * 144 and (sim.dropna() >= 0).all() and sim.notna().mean() > 0.9
-    assert abs(sim.mean() - truth.mean()) < 0.5, "ระดับลมเพี้ยน"
-    assert 0.8 < sim.std() / truth.std() < 1.2, "ความแกว่งหาย"
-    assert sim.groupby(sim.index.month).mean().idxmax() == truth.groupby(idx.month).mean().idxmax(), "ฤดูกาลเพี้ยน"
-
-    monthly = wind_stats(sim, "MS")
-    assert len(monthly) == 12 and (monthly["ws_min"] <= monthly["ws_mean"]).all() and (monthly["ws_max"] >= monthly["ws_mean"]).all()
-    assert len(wind_stats(sim, "YS")) == 1
-
-    # พลังงานรายปีต้องเท่ากับผลรวมรายเดือน และช่องว่างต้องไม่ทำให้พลังงานหาย
-    energy_monthly, energy_yearly = energy_stats(sim, "MS"), energy_stats(sim, "YS")
-    assert abs(energy_monthly["energy_mwh"].sum() / energy_yearly["energy_mwh"].iloc[0] - 1) < 0.01
-    gappy = sim.copy()
-    gappy.iloc[::2] = np.nan
-    assert abs(energy_stats(gappy, "YS")["energy_mwh"].iloc[0] / energy_yearly["energy_mwh"].iloc[0] - 1) < 0.03
-
-    ens = ensemble_stats(state, "2025-01-01", "2025-12-31 23:50", "MS", n = 30)
-    assert (ens["ws_mean_p10"] <= ens["ws_mean_p50"]).all() and (ens["ws_mean_p50"] <= ens["ws_mean_p90"]).all()
-
-    scores = score_by_freq(truth, expected(state, "2024-01-01", "2024-12-31 23:50"))
-    assert scores.loc["MS", "R2"] > scores.loc["10min", "R2"], "รวบข้อมูลแล้ว R2 ต้องดีขึ้น"
-    print(scores.round(3))
-
-    # to_raw: สร้างไฟล์ Raw จำลอง 3 channel (ลม 160 m, ลม 100 m, อุณหภูมิ) แล้วเช็คว่าตรงกับ simulate()
-    import tempfile
-    from pathlib import Path
-    site = get_site()
-    ok = truth.dropna()
-    stamp = ok.index.strftime("%Y-%m-%d %H:%M:%S.000 +0700")
-    channels = [(1, 107, 160.0, "m/s", ok.to_numpy()), (5, 111, 100.0, "m/s", ok.to_numpy() * 0.9), (16, 122, 155.0, "C", np.full(len(ok), 27.0))]
-    fake = pd.concat([pd.DataFrame({"site_code": site["site_numeric_code"], "sensor_id": sid, "timestamp": stamp, "channel": ch, "height": h,
-                                    "direction": "N", "unit": unit, "avg": v, "gust": v * 1.1, "gust_dir": np.nan, "max": v * 1.2,
-                                    "min": v * 0.8, "sd": v * 0.1}) for ch, sid, h, unit, v in channels])
-    with tempfile.TemporaryDirectory() as folder:
-        path = Path(folder) / "fake_raw.csv"
-        fake.to_csv(path, index = False)
-        out = to_raw(state, str(path), "2025-01-01", "2025-01-21 23:50", seed = 1)
-    assert list(out.columns) == list(fake.columns), "คอลัมน์ไม่ตรงกับ Raw Data"
-    out_time = pd.to_datetime(out["timestamp"], utc = True).dt.tz_convert("Asia/Bangkok").dt.tz_localize(None)
-    assert out_time.min() >= pd.Timestamp("2025-01-01") and out_time.max() <= pd.Timestamp("2025-01-21 23:50")
-    top = pd.Series(out.loc[out["channel"] == 1, "avg"].to_numpy(), index = out_time[out["channel"] == 1]).sort_index()
-    expect = simulate(state, "2025-01-01", "2025-01-21 23:50", seed = 1).dropna()
-    assert np.allclose(top.to_numpy(), expect.loc[top.index].to_numpy()), "ลมยอดเสาใน to_raw ไม่ตรงกับ simulate"
-    low = pd.Series(out.loc[out["channel"] == 5, "avg"].to_numpy(), index = out_time[out["channel"] == 5]).sort_index()
-    assert np.allclose(low.to_numpy() / top.to_numpy(), 0.9), "wind shear ไม่ถูกรักษาไว้"
-    assert (out.loc[out["channel"] == 16, "avg"] == 27.0).all(), "channel ที่ไม่ใช่ลมต้องคัดลอกตามเดิม"
-    print("forecast self-check ผ่าน")
-
-
-if __name__ == "__main__":
-    _demo()

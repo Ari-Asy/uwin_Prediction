@@ -57,7 +57,7 @@ def load_raw_data(filename: str, site_code: str | None = None) -> pd.DataFrame:
     pivot_data = pivot_data.reindex(full_index)
     pivot_data.index.name = "timestamp"
 
-    print(f"ช่วง: {pivot_data.index.min()} ถึง {pivot_data.index.max()} (GMT+7)")
+    print(f"ช่วงเวลา: {pivot_data.index.min()} ถึงช่วง {pivot_data.index.max()} (GMT+7)")
     print(f"แถวที่มี {len(full_index) - missing:,} จากแถวที่ควรมี {len(full_index):,} (coverage {(1 - missing / len(full_index)) * 100:.2f}%)")
     print(f"แถวที่หายไป {missing:,}")
     print("")

@@ -64,7 +64,7 @@ def _clean_analog(out: pd.DataFrame) -> pd.DataFrame:
             continue
         bad_analog = (out[column_analog] < low) | (out[column_analog] > high)
         if bad_analog.any():
-            print(f"QC {column_analog}: ตัดค่านอกช่วง [{low}, {high}] ออก {bad_analog.sum():,} แถว ({bad_analog.mean() * 100:.2f}%)")
+            print(f"QC {column_analog}: ตัดค่านอกช่วง [{low}, {high}] ตัดออก {bad_analog.sum():,} แถว ({bad_analog.mean() * 100:.2f}%)")
         out.loc[bad_analog, column_analog] = np.nan
     return out
 
@@ -96,12 +96,12 @@ def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
     OUTPUT: df ที่ผ่านการ QC + คอลัมน์ TI และ WS<mast> แก้เสร็จแล้ว
     """
     site = get_site(site_code)
-    out = df.copy()
+    output = df.copy()
 
-    out = _clean_wind_sensors(out, site) # กรองลม
-    out = _clean_analog(out) # กรอง SD, Temp, Pres, RH
-    out = _apply_tower_shadow(out, site) # TI + รวมคู่เงาเสา
-    return out
+    output = _clean_wind_sensors(output, site) # กรองลม
+    output = _clean_analog(output) # กรอง SD, Temp, Pres, RH
+    output = _apply_tower_shadow(output, site) # TI + รวมคู่เงาเสา
+    return output
 
 # คำนวณผลต่างของมุม 2 ทิศ
 def angular_gap(angle_a, angle_b):
