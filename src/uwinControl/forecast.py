@@ -95,7 +95,7 @@ def fit(wind: pd.Series, era5: pd.DataFrame) -> dict:
         "step": step,
         "shape": shape,
         "level": level,
-        "iav": annual_iav(era5),
+        "interannual_variability": annual_iav(era5),
         "measured": measured.to_numpy(),
         "measured_index": full_index,
         # ponytail: กันหารด้วยค่าใกล้ 0 ถ้าไซต์ไหนลมเฉลี่ยรายชั่วโมงต่ำกว่า 0.5 m/s ต้องเปลี่ยนเป็นแบบบวก
@@ -129,8 +129,8 @@ def simulate(state: dict, start, end, seed: int = 0, base: pd.Series | None = No
     base = expected(state, start, end) if base is None else base
     picks, year_factor = _blocks(state, base.index, seed)
     values = np.empty(len(base))
-    for i, s, n in picks:
-        values[i:i + n] = state["measured"][s:s + n] * _ratio(state, base, i, s, n)
+    for target_start, source_start, length in picks:
+        values[target_start:target_start + length] = state["measured"][source_start:source_start + length] * _ratio(state, base, target_start, source_start, length)
     return pd.Series(values * year_factor, index = base.index)  # ช่วงที่บล็อกต้นทางไม่มีข้อมูลจะเป็น NaN เหมือนของจริง
 
 # เลือกบล็อกต้นทาง ใช้ร่วมกันระหว่าง simulate() และ to_raw() ให้ seed เดียวกันได้ผลตรงกัน
@@ -142,12 +142,12 @@ def _blocks(state: dict, index, seed: int):
         raise ValueError(f"start ต้องเป็นเวลา 00:00 ให้รอบวันตรงกับบล็อกต้นทาง (ได้ {index[0]})")
     rng = np.random.default_rng(seed)
     block = state["block"]
-    picks = [(i, int(rng.choice(state["pools"][index[i].month])), min(block, len(index) - i)) for i in range(0, len(index), block)]
-    return picks, 1 + rng.normal(0, state["iav"])
+    picks = [(target_start, int(rng.choice(state["pools"][index[target_start].month])), min(block, len(index) - target_start)) for target_start in range(0, len(index), block)]
+    return picks, 1 + rng.normal(0, state["interannual_variability"])
 
 # ตัวคูณปรับระดับจากเวลาต้นทางไปเวลาปลายทาง (ฤดูกาล/รอบวัน/ระดับระยะยาว)
-def _ratio(state: dict, base: pd.Series, i: int, s: int, n: int):
-    return base.to_numpy()[i:i + n] / state["shape_measured"][s:s + n]
+def _ratio(state: dict, base: pd.Series, target_start: int, source_start: int, length: int):
+    return base.to_numpy()[target_start:target_start + length] / state["shape_measured"][source_start:source_start + length]
 
 # สร้างข้อมูลพยากรณ์ในรูปแบบเดียวกับไฟล์ Raw Data
 def to_raw(state: dict, raw_file: str, start, end, seed: int = 0, site_code: str | None = None) -> pd.DataFrame:
@@ -170,11 +170,11 @@ def to_raw(state: dict, raw_file: str, start, end, seed: int = 0, site_code: str
     picks, year_factor = _blocks(state, base.index, seed)
     source_index, step = state["measured_index"], state["step"]
     parts = []
-    for i, s, n in picks:
-        in_block = ((local >= source_index[s]) & (local <= source_index[s] + (n - 1) * step)).to_numpy()
+    for target_start, source_start, length in picks:
+        in_block = ((local >= source_index[source_start]) & (local <= source_index[source_start] + (length - 1) * step)).to_numpy()
         rows = raw_data[in_block].copy()
-        target_time = local[in_block] + (base.index[i] - source_index[s])
-        factor = pd.Series(_ratio(state, base, i, s, n), index = base.index[i:i + n]).reindex(target_time).to_numpy() * year_factor
+        target_time = local[in_block] + (base.index[target_start] - source_index[source_start])
+        factor = pd.Series(_ratio(state, base, target_start, source_start, length), index = base.index[target_start:target_start + length]).reindex(target_time).to_numpy() * year_factor
         wind = is_wind[in_block]
         rows.loc[wind, wind_cols] = np.round(rows.loc[wind, wind_cols].to_numpy() * factor[wind, None], 6) # ทศนิยม 6 หลักเท่า Raw Data
         rows["timestamp"] = target_time.dt.strftime(f"%Y-%m-%d %H:%M:%S.000 {offset}").to_numpy()
@@ -182,27 +182,27 @@ def to_raw(state: dict, raw_file: str, start, end, seed: int = 0, site_code: str
     return pd.concat(parts).sort_values(["timestamp", "channel"], ascending = [False, True]).reset_index(drop = True)
 
 # สรุปค่าลมต่อคาบเวลา
-def wind_stats(ws: pd.Series, freq: str = "MS") -> pd.DataFrame:
+def wind_stats(wind_speed: pd.Series, freq: str = "MS") -> pd.DataFrame:
     """
-    INPUT: ws = ลมราย 10 นาที : freq = "1h" , "D" , "MS" , "YS"
+    INPUT: windspeed = ลมราย 10 นาที : freq = "1h" , "D" , "MS" , "YS"
     OUTPUT: DataFrame สถิติลมต่อคาบ
     """
-    group = ws.resample(freq)
+    group = wind_speed.resample(freq)
     output = pd.DataFrame({
-        "ws_mean": group.mean(),
-        "ws_min": group.min(),
-        "ws_max": group.max(),
-        "ws_sd": group.std(),
-        "ws_p10": group.quantile(0.10),
-        "ws_p50": group.quantile(0.50),
-        "ws_p90": group.quantile(0.90),
+        "windspeed_mean": group.mean(),
+        "windspeed_min": group.min(),
+        "windspeed_max": group.max(),
+        "windspeed_sd": group.std(),
+        "windspeed_p10": group.quantile(0.10),
+        "windspeed_p50": group.quantile(0.50),
+        "windspeed_p90": group.quantile(0.90),
         "coverage_pct": group.count() / group.size() * 100,
     })
     output["ws_cv"] = output["ws_sd"] / output["ws_mean"]
     return output
 
 # แปลงลมเป็นพลังงานต่อคาบเวลา
-def energy_stats(ws: pd.Series, freq: str = "MS", rho: float = 1.225, turbine = None, losses = None) -> pd.DataFrame:
+def energy_stats(windspeed: pd.Series, freq: str = "MS", air_density: float = 1.225, turbine = None, losses = None) -> pd.DataFrame:
     """
     แปลงลมเป็นกำลังไฟฟ้าทีละ timestamp (ไม่ผ่าน Weibull) หัก losses แล้วรวมเป็นพลังงาน กรณีที่ช่วงที่ข้อมูลหาย เติมด้วยกำลังไฟเฉลี่ยของคาบเวลานั้น
     INPUT: rho = ความหนาแน่นของอากาศ ใช้ค่าเดียวกับ energy.calculate_aep เพื่อให้สามารถเทียบ AEP ได้
@@ -211,8 +211,8 @@ def energy_stats(ws: pd.Series, freq: str = "MS", rho: float = 1.225, turbine = 
     t = turbine or DEFAULT_TURBINE
     losses_t = losses or DEFAULT_LOSSES
     hours = 24 / get_site()["records_per_day"]
-    corrected = ws.to_numpy() * (rho / 1.225) ** (1 / 3)
-    kw = pd.Series(power_curve(corrected, t), index = ws.index).where(ws.notna())
+    corrected = windspeed.to_numpy() * (air_density / 1.225) ** (1 / 3)
+    kw = pd.Series(power_curve(corrected, t), index = windspeed.index).where(windspeed.notna())
     net = np.prod([1 - loss for loss in losses_t.values()]) * t["num_turbines"]
 
     group = kw.resample(freq)
@@ -223,17 +223,17 @@ def energy_stats(ws: pd.Series, freq: str = "MS", rho: float = 1.225, turbine = 
     })
 
 # Run หลายรอบ แล้วสรุปเป็นข้อมูล P10/P50/P90
-def ensemble_stats(state: dict, start, end, freq: str = "MS", n: int | None = None, rho: float = 1.225) -> pd.DataFrame:
+def ensemble_stats(state: dict, start, end, freq: str = "MS", runs: int | None = None, air_density: float = 1.225) -> pd.DataFrame:
     """
     OUTPUT: DataFrame คอลัมน์ <ค่า>_p10 / _p50 / _p90 เช่น ws_mean_p50, energy_mwh_p90
     ไม่เก็บลมทุกเส้นไว้ในหน่วยความจำ แต่จะเก็บแค่ค่าสถิติของแต่ละรอบ
     """
-    num = n or FORECAST["ensemble"]
+    num = runs or FORECAST["ensemble"]
     base = expected(state, start, end)
     runs = []
     for seed in range(num):
-        ws = simulate(state, start, end, seed, base)
-        runs.append(wind_stats(ws, freq).join(energy_stats(ws, freq, rho)).drop(columns = "coverage_pct"))
+        wind_speed = simulate(state, start, end, seed, base)
+        runs.append(wind_stats(wind_speed, freq).join(energy_stats(wind_speed, freq, air_density)).drop(columns = "coverage_pct"))
     output = pd.concat(runs).groupby(level = 0).quantile(list(FORECAST["quantiles"])).unstack()
     output.columns = [f"{name}_p{round(q * 100)}" for name, q in output.columns]
     return output
@@ -282,11 +282,11 @@ def _demo():
     assert len(wind_stats(sim, "YS")) == 1
 
     # พลังงานรายปีต้องเท่ากับผลรวมรายเดือน และช่องว่างต้องไม่ทำให้พลังงานหาย
-    e_month, e_year = energy_stats(sim, "MS"), energy_stats(sim, "YS")
-    assert abs(e_month["energy_mwh"].sum() / e_year["energy_mwh"].iloc[0] - 1) < 0.01
+    energy_monthly, energy_yearly = energy_stats(sim, "MS"), energy_stats(sim, "YS")
+    assert abs(energy_monthly["energy_mwh"].sum() / energy_yearly["energy_mwh"].iloc[0] - 1) < 0.01
     gappy = sim.copy()
     gappy.iloc[::2] = np.nan
-    assert abs(energy_stats(gappy, "YS")["energy_mwh"].iloc[0] / e_year["energy_mwh"].iloc[0] - 1) < 0.03
+    assert abs(energy_stats(gappy, "YS")["energy_mwh"].iloc[0] / energy_yearly["energy_mwh"].iloc[0] - 1) < 0.03
 
     ens = ensemble_stats(state, "2025-01-01", "2025-12-31 23:50", "MS", n = 30)
     assert (ens["ws_mean_p10"] <= ens["ws_mean_p50"]).all() and (ens["ws_mean_p50"] <= ens["ws_mean_p90"]).all()

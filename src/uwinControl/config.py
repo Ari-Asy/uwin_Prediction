@@ -61,7 +61,7 @@ SITES = {
         "latitude": 15.98565,
         "longitude": 104.2271899,
 
-        "raw_filename": "wind_raws_202608181213.csv",
+        "raw_filename": "wind_raws_2024.csv",
 
         "mast_height_m": 160, #TODO คืออะไร
         "hub_height_m": 150, #TODO ค่าสมมติ

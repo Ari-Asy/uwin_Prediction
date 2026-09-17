@@ -5,6 +5,7 @@ __pycache__/
 .env
 .cdsapirc
 .venv-1/
+.claude/
 
 # ไฟล์ข้อมูลต่างๆ
 data/version/*
