@@ -96,12 +96,12 @@ def run_qc(df: pd.DataFrame, site_code = None) -> pd.DataFrame:
     OUTPUT: df ที่ผ่านการ QC + คอลัมน์ TI และ WS<mast> แก้เสร็จแล้ว
     """
     site = get_site(site_code)
-    output = df.copy()
+    out = df.copy()
 
-    output = _clean_wind_sensors(output, site) # กรองลม
-    output = _clean_analog(output) # กรอง SD, Temp, Pres, RH
-    output = _apply_tower_shadow(output, site) # TI + รวมคู่เงาเสา
-    return output
+    out = _clean_wind_sensors(out, site) # กรองลม
+    out = _clean_analog(out) # กรอง SD, Temp, Pres, RH
+    out = _apply_tower_shadow(out, site) # TI + รวมคู่เงาเสา
+    return out
 
 # คำนวณผลต่างของมุม 2 ทิศ
 def angular_gap(angle_a, angle_b):

@@ -143,7 +143,9 @@ def _blocks(state: dict, index, seed: int):
     rng = np.random.default_rng(seed)
     block = state["block"]
     picks = [(target_start, int(rng.choice(state["pools"][index[target_start].month])), min(block, len(index) - target_start)) for target_start in range(0, len(index), block)]
-    return picks, 1 + rng.normal(0, state["interannual_variability"])
+    year_code, _= pd.factorize(index.year)
+    year_factor = 1 + rng.normal(0, state["interannual_variability"], year_code.max() + 1)[year_code]
+    return picks, year_factor
 
 # ตัวคูณปรับระดับจากเวลาต้นทางไปเวลาปลายทาง (ฤดูกาล/รอบวัน/ระดับระยะยาว)
 def _ratio(state: dict, base: pd.Series, target_start: int, source_start: int, length: int):
@@ -174,7 +176,8 @@ def to_raw(state: dict, raw_file: str, start, end, seed: int = 0, site_code: str
         in_block = ((local >= source_index[source_start]) & (local <= source_index[source_start] + (length - 1) * step)).to_numpy()
         rows = raw_data[in_block].copy()
         target_time = local[in_block] + (base.index[target_start] - source_index[source_start])
-        factor = pd.Series(_ratio(state, base, target_start, source_start, length), index = base.index[target_start:target_start + length]).reindex(target_time).to_numpy() * year_factor
+        factor = pd.Series(_ratio(state, base, target_start, source_start, length) * year_factor[target_start:target_start + length], 
+                           index = base.index[target_start:target_start + length]).reindex(target_time).to_numpy()
         wind = is_wind[in_block]
         rows.loc[wind, wind_cols] = np.round(rows.loc[wind, wind_cols].to_numpy() * factor[wind, None], 6) # ทศนิยม 6 หลักเท่า Raw Data
         rows["timestamp"] = target_time.dt.strftime(f"%Y-%m-%d %H:%M:%S.000 {offset}").to_numpy()
